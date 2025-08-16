@@ -5,37 +5,41 @@ const userSchema = new Schema({
     type: String,
     required: true,
   },
+  
   email: {
     type: String,
     unique: true,
     required: true,
   },
+
   password: {
     type: String,
   },
+
   additionalDetailes: {
     type: Schema.Types.ObjectId,
     ref: "Profile",
   },
-  role: {
+
+  accountType: {
     type: String,
-    enum: ["candidate", "admin"],
+    enum: ["candidate", "interviewer" ,"admin"],
     default: "candidate",
   },
 
-  mockHistory: [
-    {
-      type: Schema.Types.ObjectId,
-      ref: "MockInterview",
-    },
-  ],
+  // mockHistory: [
+  //   {
+  //     type: Schema.Types.ObjectId,
+  //     ref: "MockInterview",
+  //   },
+  // ],
 
-  oaAttempts: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "OAAttempt",
-    },
-  ],
+  // oaAttempts: [
+  //   {
+  //     type: mongoose.Schema.Types.ObjectId,
+  //     ref: "OAAttempt",
+  //   },
+  // ],
 
   createdAt: {
     type: Date,

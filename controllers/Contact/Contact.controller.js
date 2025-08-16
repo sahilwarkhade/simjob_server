@@ -1,4 +1,4 @@
-import { contactUsEmail } from "../../Templates/Email/contactus"
+import { contactUsEmail } from "../../Templates/Email/contactus.js"
 import { mailSender } from "../../utils/SendEmail"
 
 export const contactUsController = async (req, res) => {
