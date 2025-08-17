@@ -20,9 +20,10 @@ app.use('/api/v1',ContactUsRoute);
 app.use('/api/v1/profile',ProfileRoute);
 
 app.get('/',(req,res)=>{
-    res.send("Hi, I am a server");
+    res.send("Hi, I am a simjob server");
 })
 
-app.listen(process.env.PORT,()=>{
+
+app.listen(process.env.PORT,async()=>{
     console.log("Server Listening on PORT : ", process.env.PORT)
 })

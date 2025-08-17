@@ -51,24 +51,27 @@ const profileSchema = new Schema({
     emailNotification:{
       type:String,
       enum:['yes','no'],
-      required:true,
+      default:'no'
     },
     weeklyProgressReport:{
       type:String,
       enum:['yes','no'],
+      default:'no'
     },
     practiceReminder:{
       type:String,
       enum:['yes','no'],
+      default:'no'
     },
     marketingEmails:{
       type:String,
       enum:['yes','no'],
+      default:'no'
     }
   },
   resumeUrl: {
     type: String,
   },
-});
+},{timestamps:true});
 
 export default model("Profile", profileSchema);

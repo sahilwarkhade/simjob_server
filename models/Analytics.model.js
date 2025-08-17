@@ -1,7 +1,7 @@
 import { model, Schema } from "mongoose";
 
 const analyticsSchema = new Schema({
-  userId: {
+  user: {
     type:Schema.Types.ObjectId,
     ref:"User",
     required:true
@@ -30,6 +30,6 @@ const analyticsSchema = new Schema({
   improvementSuggestions: {
     type: String,
   },
-});
+},{timestamps:true});
 
 export default model("Analytics", analyticsSchema);

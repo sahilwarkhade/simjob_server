@@ -214,7 +214,7 @@ export const deleteAccount = async (req, res) => {
         message: "User not found",
       });
     }
-    await Analytics.findOneAndDelete({ userId });
+    await Analytics.findOneAndDelete({ user:userId });
     await Profile.findOneAndDelete({ _id: user?.additionalDetailes });
     await MockInterview.deleteMany({ user: userId });
     await OATest.deleteMany({ user: userId });
