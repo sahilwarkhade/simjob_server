@@ -40,9 +40,14 @@ const mockInterviewSchema = new mongoose.Schema({
   ],
   feedback: {
     type: Object,
+  },
+  createdAt:{
+    type:Date,
+    default:Date.now
   }
   // transcript: { type: String }, // full STT transcript
   // audioURL: { type: String }, // optional: store audio file for playback
+
 },{timestamps:true});
 
 export default mongoose.model("MockInterview", mockInterviewSchema);

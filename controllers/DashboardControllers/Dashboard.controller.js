@@ -5,7 +5,7 @@ import OATest from "../../models/OATest.model.js";
 export const getUserStats = async (req, res) => {
   const { userId } = req.user;
   try {
-    const analytics = await Analytics.findOne({ user:userId });
+    const analytics = await Analytics.findOne({ user: userId });
     if (!analytics) {
       return res.status(401).json({
         success: false,
@@ -68,21 +68,17 @@ export const getHistory = async (req, res) => {
   const { userId } = req.user;
 
   try {
-    const mockHistory = await MockInterview.find({ user: userId });
-    // if (!mockHistory) {
-    //   return res.status(401).json({
-    //     success: false,
-    //     message: "No mock interview found",
-    //   });
-    // }
+    const mockHistory = await MockInterview.find({ user: userId })
+      .select(
+        "mockCategory companyName skills role difficultyLevel duration feedback createdAt"
+      )
+      .sort(-1);
 
-    const oaHistory = await OATest.find({ user: userId });
-    // if (!oaHistory) {
-    //   return res.status(401).json({
-    //     success: false,
-    //     message: "No online assessment found",
-    //   });
-    // }
+    const oaHistory = await OATest.find({ user: userId })
+      .select(
+        "oaCategory companies role difficulty duration feedback createdAt"
+      )
+      .sort(-1);
 
     return res.status(200).json({
       success: true,

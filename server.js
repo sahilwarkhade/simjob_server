@@ -8,9 +8,13 @@ import ProfileRoute from "./routes/Profile.route.js"
 import DashboardRoutes from "./routes/Dashboard.route.js"
 import ContactUsRoute from './routes/Contactus.route.js'
 import { connectCloudinary } from "./config/Cloudinary.js";
+import cookieParser from "cookie-parser";
 
 await connectDB();
 await connectCloudinary();
+
+const cookieSecret=process.env.COOKIE_SECRET;
+app.use(cookieParser(cookieSecret));
 app.use(express.json());
 
 app.use('/api/v1/user',UserRoutes);

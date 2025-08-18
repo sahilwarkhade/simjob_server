@@ -13,7 +13,7 @@ const oaTestSchema = new mongoose.Schema(
       default: "company specific",
     },
 
-    company: [{ type: String, required: true }],
+    companies: [{ type: String, required: true }],
 
     role: { type: String },
 
@@ -52,6 +52,10 @@ const oaTestSchema = new mongoose.Schema(
     feedback: {
       type: Object,
     },
+    createdAt:{
+      type:Date,
+      default:Date.now
+    }
   },
   { timestamps: true }
 );
