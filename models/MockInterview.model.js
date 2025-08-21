@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Schema } from "mongoose";
 
 const mockInterviewSchema = new mongoose.Schema({
   user: {
@@ -35,11 +35,11 @@ const mockInterviewSchema = new mongoose.Schema({
   },
   questions: [
     {
-      type: Object,
+      type: Schema.Types.Mixed,
     },
   ],
   feedback: {
-    type: Object,
+    type: Schema.Types.Mixed,
   },
   createdAt:{
     type:Date,

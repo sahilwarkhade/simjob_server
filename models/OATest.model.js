@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Schema } from "mongoose";
 
 const oaTestSchema = new mongoose.Schema(
   {
@@ -7,6 +7,7 @@ const oaTestSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+
     oaCategory: {
       type: String,
       enum: ["company specific", "practice"],
@@ -27,35 +28,29 @@ const oaTestSchema = new mongoose.Schema(
       default: "medium",
     },
 
-    testSections: [{ type: String }],
+    userSelectedSections: [{ type: String }],
 
     duration: { type: Number },
 
     specialIntructions: { type: String },
 
-    questions: [
+    preferredProgrammingLanguges: [{ type: String, required: true }],
+
+    sections: [
       {
-        questionText: String,
-        type: { type: String, enum: ["mcq", "coding"] },
-        options: [{ type: String }], // for MCQ
-        correctOption: { type: String }, // for MCQ
-        codeStarter: { type: String }, // for coding
-        testCases: [
-          {
-            input: { type: String },
-            expectedOutput: { type: String },
-          },
-        ],
+        type: Schema.Types.ObjectId,
+        ref: "OATestSections",
       },
     ],
 
     feedback: {
-      type: Object,
+      type: Schema.Types.Mixed,
     },
-    createdAt:{
-      type:Date,
-      default:Date.now
-    }
+
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
   { timestamps: true }
 );
