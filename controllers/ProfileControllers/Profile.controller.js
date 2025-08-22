@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Analytics from "../../models/Analytics.model.js";
 import MockInterview from "../../models/MockInterview.model.js";
 import OATest from "../../models/OATest.model.js";
@@ -203,7 +204,7 @@ export const updateProfile = async (req, res) => {
 
 export const deleteAccount = async (req, res) => {
   const { userId } = req.user;
-
+  const mongodbSession=await mongoose.startSession();
   try {
     const user = await User.findOne({ _id: userId }).select(
       "additionalDetailes"
@@ -214,22 +215,27 @@ export const deleteAccount = async (req, res) => {
         message: "User not found",
       });
     }
+    mongodbSession.startTransaction()
     await Analytics.findOneAndDelete({ user:userId });
     await Profile.findOneAndDelete({ _id: user?.additionalDetailes });
     await MockInterview.deleteMany({ user: userId });
     await OATest.deleteMany({ user: userId });
     await User.findOneAndDelete({ _id: userId });
-
+    await mongodbSession.commitTransaction()
     return res.status(200).json({
       success: true,
       message: "Account deleted successfully",
     });
   } catch (error) {
+    await mongodbSession.abortTransaction();
     console.log("Error in deleting user :: ", error);
     return res.status(500).json({
       success: false,
       message:
         "Something went wrong while deleting user, please try again after some time",
     });
+  }
+  finally{
+    mongodbSession.endSession();
   }
 };
