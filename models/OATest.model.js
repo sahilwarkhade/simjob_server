@@ -14,7 +14,7 @@ const oaTestSchema = new mongoose.Schema(
       default: "company specific",
     },
 
-    companies: [{ type: String, required: true }],
+    company: { type: String, required: true },
 
     role: { type: String },
 
@@ -32,7 +32,7 @@ const oaTestSchema = new mongoose.Schema(
 
     duration: { type: Number },
 
-    specialIntructions: { type: String },
+    specialInstructions: { type: String },
 
     preferredProgrammingLanguges: [{ type: String, required: true }],
 

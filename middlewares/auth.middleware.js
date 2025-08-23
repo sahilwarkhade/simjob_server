@@ -1,4 +1,4 @@
-import Session from "../models/Session.model";
+import Session from "../models/Session.model.js";
 
 const auth = async(req, res, next) => {
   const { session_id } = req.signedCookies;

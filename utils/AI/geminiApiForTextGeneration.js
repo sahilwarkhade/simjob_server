@@ -1,14 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 import { extractJson } from "../extractJson.js";
-import questionGenerationPrompt from "../../aiPrompts/questionGeneration.js";
 
-export async function genrateQuestions(role, difficultyLevel, type) {
+export async function geminiApiForTextGeneration(prompt) {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GoogleGenAI });
+    const ai = new GoogleGenAI({ apiKey: process.env.GoogleGenAI || "AIzaSyBIKKqwmMYxkQ2wIkN-ssOqbPN2xR6i6m0" });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: questionGenerationPrompt(type, difficultyLevel, role),
+      contents: prompt
     });
+
+    // console.log(response.text)
     const extractedJson = extractJson(response.text);
     return extractedJson;
   } catch (err) {

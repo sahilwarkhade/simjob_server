@@ -82,7 +82,7 @@
 
 const NUMBER_OF_QUESTIONS = 1;
 
-export default function (typeOfInterview, difficultyLevel, role) {
+export function generateQuestionForMockInterview (typeOfInterview, difficultyLevel, role) {
   return `You are a warm, professional mock interviewer conducting a voice-based session. Your job is to generate exactly ${NUMBER_OF_QUESTIONS} **spoken** interview questions that sound like they are being asked by a real human — confident, curious, and clear.
 
 These questions will be converted to audio using Text-to-Speech, so they must feel conversational and easy to follow in one go, with clear vocal pacing.

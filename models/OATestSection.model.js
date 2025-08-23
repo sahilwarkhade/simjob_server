@@ -17,7 +17,7 @@ const OATestSectionSchema = new Schema(
         },
         question_title: { type: String } /*only for coding section*/,
         question_description: { type: String },
-        difficulty: { type: String, enum: ["easy", "medium", "hard"] },
+        difficulty: { type: String, enum: ["easy", "medium", "hard", 'expert'] },
         test_cases: {
           visible: [
             {
@@ -36,20 +36,22 @@ const OATestSectionSchema = new Schema(
           ],
         } /*Only for coding section*/,
 
+        constraints: { type: String, default: null },
+        starter_code: [
+          { type: Schema.Types.Mixed },
+        ] /*Only for coding section*/,
+
         options: [
           {
             text: { type: String, required: true },
             isCorrect: { type: Boolean, required: true, default: false },
           },
         ], // For multiple-choice or single-choice questions
-
-        starter_code: [
-          { type: Schema.Types.Mixed },
-        ] /*Only for coding section*/,
       },
     ],
 
-    no_of_answered_question: { type: Number, default: 0 },
+    // no_of_answered_question: { type: Number, default: 0 },
+
     section_answers: [
       {
         question_id: {
@@ -60,13 +62,9 @@ const OATestSectionSchema = new Schema(
           type: String,
           default: null,
         },
-        reason_of_failure: {
-          type: String,
-        },
-        is_correct: {
-          type: Boolean,
-          default: false,
-        },
+        evaluation:{
+          type:Schema.Types.Mixed
+        }
       },
     ],
   },

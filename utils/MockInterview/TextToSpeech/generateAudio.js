@@ -1,5 +1,5 @@
 import { generateId } from "../../generateID.js";
-import { uploadAudioToCloudinary } from "../Upload/uploadAudioFileToCloudinary.js";
+import { uploadAudioToCloudinary } from "../../Upload/uploadAudioFileToCloudinary.js";
 import { textToSpeech } from "./textToSpeech.js";
 
 export async function generateAudio(questions, mockInterviewId) {

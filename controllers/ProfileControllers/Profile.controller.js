@@ -4,7 +4,8 @@ import MockInterview from "../../models/MockInterview.model.js";
 import OATest from "../../models/OATest.model.js";
 import Profile from "../../models/Profile.model.js";
 import User from "../../models/User.model.js";
-import { uploadToCloudinary } from "../../utils/MockInterview/Upload/uploadToCloudinary.js";
+import { uploadToCloudinary } from "../../utils/Upload/uploadToCloudinary.js";
+
 
 export const getUserProfileDetails = async (req, res) => {
   const { userId } = req.user;

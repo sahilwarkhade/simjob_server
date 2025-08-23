@@ -1,6 +1,6 @@
 import axios from "axios";
 import MockInterview from "../../models/MockInterview.model.js";
-import { genrateQuestions } from "../../utils/MockInterview/generateQuestions.js";
+import { geminiApiForTextGeneration } from "../../utils/AI/geminiApiForTextGeneration.js"; 
 import { generateAudio } from "../../utils/MockInterview/TextToSpeech/generateAudio.js";
 import { sendAudioResponse } from "../../utils/MockInterview/TextToSpeech/sendAudioResponse.js";
 import { textToSpeech } from "../../utils/MockInterview/TextToSpeech/textToSpeech.js";
@@ -12,23 +12,21 @@ import {
   GoogleGenAI,
 } from "@google/genai";
 import fs from "fs/promises";
-import { uploadToCloudinary } from "../../utils/MockInterview/Upload/uploadToCloudinary.js";
 import { feedbackPrompt } from "../../aiPrompts/feedbackPrompt.js";
 import { answerAnalysisPrompt } from "../../aiPrompts/answeAnalysisPrompt.js";
 import { generateId } from "../../utils/generateID.js";
-import { deleteAssetFromCloudinary } from "../../utils/MockInterview/Upload/deleteAssetFromClodinary.js";
 import { introductionPrompt } from "../../aiPrompts/introductionPrompt.js";
+import { uploadToCloudinary } from "../../utils/Upload/uploadToCloudinary.js";
+import {deleteAssetFromCloudinary} from "../../utils/Upload/deleteAssetFromClodinary.js"
+import { generateQuestionForMockInterview } from "../../aiPrompts/questionGeneration.js";
 const ai = new GoogleGenAI({ apiKey: process.env.GoogleGenAI });
 
 export const startMockInterview = async (req, res) => {
   const { role, difficultyLevel, interviewTopic } = req.body;
   const userId = req.user.userId;
   try {
-    const generatedQuestion = await genrateQuestions(
-      role,
-      difficultyLevel,
-      interviewTopic
-    );
+    const prompt=generateQuestionForMockInterview(interviewTopic, difficultyLevel, role)
+    const generatedQuestion = await geminiApiForTextGeneration(prompt);
 
     const newMockInterview = new MockInterview({
       user: userId,
