@@ -1,11 +1,10 @@
 import express from 'express';
-import { loginUser, registerUser, updatePassword } from '../controllers/Authcontrollers/Auth.controller.js';
-import auth from "../middlewares/auth.middleware.js"
+import { continueWithGoogle, loginUser, registerUser} from '../controllers/Authcontrollers/Auth.controller.js';
 const router = express.Router();
 
 router.post('/register', registerUser);
 router.post('/login', loginUser);
-router.post('/changepassword',auth, updatePassword)
+router.post('/google', continueWithGoogle)
 
 
 export default router;

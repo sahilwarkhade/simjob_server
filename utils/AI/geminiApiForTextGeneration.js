@@ -3,7 +3,7 @@ import { extractJson } from "../extractJson.js";
 
 export async function geminiApiForTextGeneration(prompt) {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GoogleGenAI || "AIzaSyBIKKqwmMYxkQ2wIkN-ssOqbPN2xR6i6m0" });
+    const ai = new GoogleGenAI({ apiKey: process.env.GoogleGenAI});
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt

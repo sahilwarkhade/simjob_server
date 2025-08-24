@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import User from "../../models/User.model.js";
 import bcrypt from "bcrypt";
 import Profile from "../../models/Profile.model.js";
@@ -7,10 +8,13 @@ import { mailSender } from "../../utils/SendEmail/index.js";
 import { otpTemplate } from "../../templates/Email/registrationOtp.js";
 import { forgetPasswordOtpTemplate } from "../../templates/Email/forgetPasswordOpt.js";
 import Session from "../../models/Session.model.js";
+import { getTokenData } from "../../utils/GoogleAuth/index.js";
 
 export const registerUser = async (req, res) => {
+  const mongoSession = await mongoose.startSession();
   try {
     const { fullName, email, password, confirmPassword, otp } = req.body;
+
     if (!fullName || !email || !password || !confirmPassword || !otp) {
       return res.status(403).json({
         success: false,
@@ -44,18 +48,21 @@ export const registerUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    mongoSession.startTransaction();
+
     const additionalDetailes = new Profile();
-    await additionalDetailes.save();
+    await additionalDetailes.save({ session: mongoSession });
 
     const user = new User({
       fullName,
       email,
       password: hashedPassword,
       accountType: "candidate",
+      authStrategy: "local",
       additionalDetailes: additionalDetailes._id,
     });
 
-    await user.save();
+    await user.save({ session: mongoSession });
 
     const userAnalytics = new Analytics({
       user: user._id,
@@ -71,12 +78,16 @@ export const registerUser = async (req, res) => {
 
     await userAnalytics.save();
 
+    await mongoSession.commitTransaction();
     return res
       .status(201)
       .json({ success: true, message: "User registered successfully.", user });
   } catch (err) {
+    await mongoSession.abortTransaction();
     console.log("error in resgister", err);
     res.status(500).json({ success: false, message: "Server error." });
+  } finally {
+    await mongoSession.endSession();
   }
 };
 
@@ -89,11 +100,18 @@ export const loginUser = async (req, res) => {
         message: "All fields are required",
       });
     }
-    const user = await User.findOne({ email }).select("-password");
+    const user = await User.findOne({ email }).select("password");
     if (!user) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid credentials." });
+    }
+
+    if (!user.password) {
+      return res.status(401).json({
+        success: false,
+        message: `You were sign up using ${user.authStrategy}, so use ${user.authStrategy} or do forget password`,
+      });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -119,6 +137,7 @@ export const loginUser = async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       signed: true,
+      secure: true,
       maxAge: 1000 * 60 * 60 * 24 * 7,
     };
     return res
@@ -148,26 +167,33 @@ export const updatePassword = async (req, res) => {
         message: "Please, login again...",
       });
     }
-    if (!currentPassword || !newPassword) {
+
+    if (!newPassword) {
       return res.status(403).json({
         success: false,
         message: "All fields are required",
       });
     }
-
     const user = await User.findById(userId);
 
-    const isPasswordCorrect = await bcrypt.compare(
-      currentPassword,
-      user.password
-    );
-    if (!isPasswordCorrect) {
-      return res.status(400).json({
-        success: false,
-        message: "please, enter correct current password",
-      });
+    if (user.authStrategy === "local") {
+      if (!currentPassword) {
+        return res.status(403).json({
+          success: false,
+          message: "current password required",
+        });
+      }
+      const isPasswordCorrect = await bcrypt.compare(
+        currentPassword,
+        user.password
+      );
+      if (!isPasswordCorrect) {
+        return res.status(400).json({
+          success: false,
+          message: "please, enter correct current password",
+        });
+      }
     }
-
     const newHashedPassword = await bcrypt.hash(newPassword, 10);
 
     user.password = newHashedPassword;
@@ -358,5 +384,98 @@ export const logOut = async (req, res) => {
       success: false,
       message: "Something went wrong, please try again later...",
     });
+  }
+};
+
+export const continueWithGoogle = async (req, res) => {
+  const { idToken } = req.body;
+
+  if (!idToken) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid request",
+    });
+  }
+
+  const mongoSession = await mongoose.startSession();
+
+  try {
+    // verifying idToken
+    const { email, picture, name, sub } = await getTokenData(idToken);
+
+    const user = await User.findOne({ email }).lean();
+
+    let session;
+
+    if (user) {
+      if(user.authStrategy !== 'google'){
+        return res.status(401).json({
+          success:false,
+          message:"Not able to get google account, please register"
+        })
+      }
+      const allSessions = await Session.find({ user: user._id });
+      if (allSessions.length > 0) {
+        await Session.deleteMany({ user: user._id });
+      }
+
+      session = await Session.create({ user: user._id });
+    } else {
+      mongoSession.startTransaction();
+
+      const additionalDetailes = new Profile();
+      await additionalDetailes.save({ session: mongoSession });
+
+      const newUser = new User({
+        fullName: name,
+        email,
+        avatar: picture,
+        authStrategy: "google",
+        accountType: "candidate",
+        google: sub,
+        additionalDetailes: additionalDetailes._id,
+      });
+
+      await newUser.save({ session: mongoSession });
+
+      const userAnalytics = new Analytics({
+        user: newUser._id,
+        totalMockInterviews: 0,
+        totalOaTests: 0,
+        averageMockScore: 0,
+        averageOaScore: 0,
+        weakPoints: "",
+        strongPoints: "",
+        imporvedPoints: "",
+        improvementSuggestions: "",
+      });
+
+      await userAnalytics.save({ session: mongoSession });
+
+      session = await Session.create({ user: newUser._id });
+    }
+
+    res.cookie("session_id", session._id, {
+      httpOnly: true,
+      signed: true,
+      secure: true,
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+    });
+
+    await mongoSession.commitTransaction();
+    return res.status(200).json({
+      success: true,
+      message: "Successfully logged in...",
+      user,
+    });
+  } catch (error) {
+    await mongoSession.abortTransaction();
+    console.log("Error in login with google :: ", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong, please try again later...",
+    });
+  } finally {
+    await mongoSession.endSession();
   }
 };
