@@ -9,12 +9,18 @@ import { otpTemplate } from "../../templates/Email/registrationOtp.js";
 import { forgetPasswordOtpTemplate } from "../../templates/Email/forgetPasswordOpt.js";
 import Session from "../../models/Session.model.js";
 import { getTokenData } from "../../utils/GoogleAuth/index.js";
+import {
+  getAccessToken,
+  getPrimaryEmail,
+  getUserProfile,
+} from "../../utils/GithubAuth/index.js";
 
 export const registerUser = async (req, res) => {
-  const mongoSession = await mongoose.startSession();
-  try {
-    const { fullName, email, password, confirmPassword, otp } = req.body;
+  const { fullName, email, password, confirmPassword, otp } = req.body;
 
+  const mongoSession = await mongoose.startSession();
+  mongoSession.startTransaction();
+  try {
     if (!fullName || !email || !password || !confirmPassword || !otp) {
       return res.status(403).json({
         success: false,
@@ -46,9 +52,7 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    mongoSession.startTransaction();
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const additionalDetailes = new Profile();
     await additionalDetailes.save({ session: mongoSession });
@@ -100,14 +104,15 @@ export const loginUser = async (req, res) => {
         message: "All fields are required",
       });
     }
-    const user = await User.findOne({ email }).select("password");
+
+    const user = await User.findOne({ email });
     if (!user) {
       return res
         .status(400)
         .json({ success: false, message: "Invalid credentials." });
     }
 
-    if (!user.password) {
+    if (!user.password || user.password.length === 0) {
       return res.status(401).json({
         success: false,
         message: `You were sign up using ${user.authStrategy}, so use ${user.authStrategy} or do forget password`,
@@ -232,14 +237,6 @@ export const sendOtp = async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ email }).lean();
-    if (user) {
-      return res.status(401).json({
-        success: false,
-        message: "User is already registered, please do login",
-      });
-    }
-
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
 
     await OTP.findOneAndUpdate(
@@ -248,27 +245,21 @@ export const sendOtp = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    await mailSender(
-      email,
-      type === "signup"
-        ? "Registration OTP from SimJob"
-        : "Forget Password OTP from SimJob",
-      type === "signup"
-        ? otpTemplate(otpCode)
-        : forgetPasswordOtpTemplate(otpCode)
-    );
+    if (type === "signup") {
+      await mailSender(
+        email,
+        "Registration OTP from SimJob",
+        otpTemplate(otpCode)
+      );
 
-    type === "signupotp"
-      ? await mailSender(
-          email,
-          "Registration OTP from SimJob",
-          otpTemplate(otpCode)
-        )
-      : await mailSender(
-          email,
-          "Forget Password OTP from SimJob",
-          forgetPasswordOtpTemplate(otpCode)
-        );
+      console.log("SIGN UP")
+    } else {
+      await mailSender(
+        email,
+        "Forget Password OTP from SimJob",
+        forgetPasswordOtpTemplate(otpCode)
+      );
+    }
 
     return res.status(201).json({
       success: true,
@@ -285,6 +276,7 @@ export const sendOtp = async (req, res) => {
 
 export const verifyOtp = async (req, res) => {
   const { email, otp } = req.body;
+  console.log("OTP :: ", otp)
   try {
     if (!email || !otp) {
       return res.status(403).json({
@@ -293,11 +285,12 @@ export const verifyOtp = async (req, res) => {
       });
     }
 
-    const otpRecord = await OTP.find({ email, otp }).select("otp").lean();
+    const otpRecord = await OTP.findOne({ email, otp }).select("otp").lean();
+    console.log("OTP RECORD :: ", otpRecord)
     if (
       !otpRecord ||
       otpRecord.length === 0 ||
-      otpRecord.otp !== otp.toString()
+      otpRecord.otp !== otp
     ) {
       return res.status(400).json({
         success: false,
@@ -397,22 +390,24 @@ export const continueWithGoogle = async (req, res) => {
     });
   }
 
-  const mongoSession = await mongoose.startSession();
+  console.log("IN GOOGLE AUTH CONTROLLER");
 
+  const mongoSession = await mongoose.startSession();
+  mongoSession.startTransaction();
   try {
     // verifying idToken
     const { email, picture, name, sub } = await getTokenData(idToken);
 
-    const user = await User.findOne({ email }).lean();
+    let user = await User.findOne({ email }).lean();
 
     let session;
 
     if (user) {
-      if(user.authStrategy !== 'google'){
+      if (user.authStrategy !== "google") {
         return res.status(401).json({
-          success:false,
-          message:"Not able to get google account, please register"
-        })
+          success: false,
+          message: "Not able to get google account, please register",
+        });
       }
       const allSessions = await Session.find({ user: user._id });
       if (allSessions.length > 0) {
@@ -421,8 +416,6 @@ export const continueWithGoogle = async (req, res) => {
 
       session = await Session.create({ user: user._id });
     } else {
-      mongoSession.startTransaction();
-
       const additionalDetailes = new Profile();
       await additionalDetailes.save({ session: mongoSession });
 
@@ -453,6 +446,8 @@ export const continueWithGoogle = async (req, res) => {
       await userAnalytics.save({ session: mongoSession });
 
       session = await Session.create({ user: newUser._id });
+
+      user = newUser;
     }
 
     res.cookie("session_id", session._id, {
@@ -471,6 +466,97 @@ export const continueWithGoogle = async (req, res) => {
   } catch (error) {
     await mongoSession.abortTransaction();
     console.log("Error in login with google :: ", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong, please try again later...",
+    });
+  } finally {
+    await mongoSession.endSession();
+  }
+};
+
+export const continueWithGitHub = async (req, res) => {
+  const { code } = req.query;
+
+  if (!code) {
+    return res.status(400).json({ message: "Authorization code is missing." });
+  }
+  const mongoSession = await mongoose.startSession();
+  try {
+    const access_token = await getAccessToken(code);
+
+    const primaryEmail = await getPrimaryEmail(access_token);
+
+    let user = await User.findOne({ email: primaryEmail }).lean();
+    let session;
+
+    mongoSession.startTransaction();
+    if (user) {
+      if (user.authStrategy !== "github") {
+        return res.status(401).json({
+          success: false,
+          message: `This email is already registered using ${user.authStrategy} login using that, or do forget password`,
+        });
+      }
+
+      const allSessions = await Session.find({ user: user._id }).lean();
+      if (allSessions.length > 0) {
+        await Session.deleteMany({ user: user._id });
+      }
+
+      session = await Session.create({ user: user._id });
+    } else {
+      const profile = await getUserProfile(access_token);
+
+      const additionalDetailes = new Profile();
+      await additionalDetailes.save({ session: mongoSession });
+
+      const newUser = new User({
+        fullName: profile?.name,
+        email: primaryEmail,
+        authStrategy: "github",
+        additionalDetailes: additionalDetailes?._id,
+        accountType: "candidate",
+        avatar: profile?.avatar_url,
+        github: profile?.id.toString(),
+      });
+
+      await newUser.save({ session: mongoSession });
+
+      const userAnalytics = new Analytics({
+        user: newUser._id,
+        totalMockInterviews: 0,
+        totalOaTests: 0,
+        averageMockScore: 0,
+        averageOaScore: 0,
+        weakPoints: "",
+        strongPoints: "",
+        imporvedPoints: "",
+        improvementSuggestions: "",
+      });
+
+      await userAnalytics.save({ session: mongoSession });
+
+      session = await Session.create({ user: newUser._id });
+
+      user = newUser;
+    }
+
+    res.cookie("session_id", session._id, {
+      httpOnly: true,
+      signed: true,
+      secure: true,
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+    });
+
+    await mongoSession.commitTransaction();
+
+    return res.redirect(process.env.FRONTEND_URL);
+  } catch (error) {
+    await mongoSession.abortTransaction();
+
+    console.log("Error in login with google :: ", error);
+
     return res.status(500).json({
       success: false,
       message: "Something went wrong, please try again later...",

@@ -8,12 +8,10 @@ export const getTokenData = async (idToken) => {
     audience: process.env.GOOGLE_CLIENT_ID,
   });
 
-  console.log("Googlr User :: ",googleUser);
   if(!googleUser){
     throw new Error("Invalid ID Token")
   }
   const payload = await googleUser.getPayload();
-  console.log("Google Payload :: ", payload);
 
   const {email, picture, name,sub}=payload;
   return {email, picture, name,sub};

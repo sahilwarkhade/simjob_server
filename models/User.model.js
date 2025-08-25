@@ -25,11 +25,10 @@ const userSchema = new Schema(
 
     password: {
       type: String,
-      required: function () {
-        return this.authStrategy === "local";
-      },
+      // required: function () {
+      //   return this.authStrategy === "local";
+      // },
       minlength: 3,
-      select: false,
     },
 
     additionalDetailes: {
@@ -45,7 +44,7 @@ const userSchema = new Schema(
 
     avatar: {
       type: String,
-      default: "",
+      default: "https://t4.ftcdn.net/jpg/07/03/86/11/360_F_703861114_7YxIPnoH8NfmbyEffOziaXy0EO1NpRHD.jpg",
     },
     google: { type: String, unique: true, sparse: true },
     github: { type: String, unique: true, sparse: true },
