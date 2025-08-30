@@ -5,35 +5,51 @@ import { geminiApiForTextGeneration } from "../../utils/AI/geminiApiForTextGener
 import { generatePracticeQuestionForOATest } from "../../aiPrompts/generatePracticeQuestionForOATest.js";
 import { oaTestFeedback } from "../../aiPrompts/oaTestFeedback.js";
 import Analytics from "../../models/Analytics.model.js";
+import mongoose from "mongoose";
 
 export const generateCompanySpecificTest = async (req, res) => {
-  try {
-    const { userId } = req.user;
-    const {
-      oaCategory,
-      company,
-      role,
-      experienceLevel,
-      selectedSections,
-      instructions,
-      preferredProgrammingLanguages,
-    } = req.body;
+  const { userId } = req.user;
+  const {
+    oaCategory,
+    company,
+    role,
+    experienceLevel,
+    selectedSections,
+    instructions,
+    preferredProgrammingLanguages,
+  } = req.body;
 
+  const mongoSession = await mongoose.startSession();
+  mongoSession.startTransaction();
+
+  try {
     if (
       !oaCategory ||
       !company ||
       !role ||
       !experienceLevel ||
-      !preferredProgrammingLanguages
+      !preferredProgrammingLanguages ||
+      preferredProgrammingLanguages.length === 0
     ) {
-      return res.status(401).json({
+      console.log({
+        oaCategory,
+        company,
+        role,
+        experienceLevel,
+        preferredProgrammingLanguages,
+      });
+      return res.status(400).json({
         success: false,
-        message:
-          "Required field are important to generate test, so please select required field",
+        message: `Required fields ${
+          oaCategory ||
+          company ||
+          role ||
+          experienceLevel ||
+          preferredProgrammingLanguages
+        } are missing.`,
       });
     }
 
-    //gemini API call here;
     const prompt = generateCompanySpecificTestSections(
       company,
       role,
@@ -43,78 +59,88 @@ export const generateCompanySpecificTest = async (req, res) => {
       instructions
     );
 
+    let llmResponse = await geminiApiForTextGeneration(prompt);
+
     const test = new OATest({
       user: userId,
       oaCategory,
       company,
       role,
       experienceLevel,
-      difficulty: null,
-      userSelectedSections: selectedSections ? [...selectedSections] : null,
-      specialInstructions: instructions ? instructions : null,
-      preferredProgrammingLanguges: [...preferredProgrammingLanguages],
+      userSelectedSections: selectedSections || [],
+      specialInstructions: instructions || null,
+      preferredProgrammingLanguages: [...preferredProgrammingLanguages],
+      sections: [],
     });
 
-    const response = await geminiApiForTextGeneration(prompt);
-    response.length > 0 &&
-      response.forEach(async (element) => {
-        const section = await OATestSection.create(element);
-        if (section) test.sections.push(section?._id);
+    if (llmResponse.length > 0) {
+      const sectionPromises = llmResponse.map(async (sectionData) => {
+        console.log("SECTION DATA ::: ", sectionData);
+        const newSection = await OATestSection.create([sectionData], {
+          session: mongoSession,
+        });
+
+        return newSection[0];
       });
 
-    await test.save();
+      const createdSections = await Promise.all(sectionPromises);
+      createdSections.forEach((section) => {
+        if (section) test.sections.push(section._id);
+      });
+    }
+
+    await test.save({ session: mongoSession });
+
+    await mongoSession.commitTransaction();
 
     return res.status(201).json({
       success: true,
-      message: "Test created successfully",
-      testDetails: test,
+      message: "Test created successfully.",
+      testID: test._id,
     });
   } catch (error) {
-    console.log("Error in generating company specific test :: ", error);
+    await mongoSession.abortTransaction();
+    console.error("Error in generateCompanySpecificTest controller:", error);
     return res.status(500).json({
       success: false,
-      message: "Something went wrong, please try again later...",
+      message:
+        "An unexpected error occurred while generating the test. Please try again later.",
     });
+  } finally {
+    await mongoSession.endSession();
   }
 };
 
 export const generatePracticeTest = async (req, res) => {
-  try {
-    const {
-      oaCategory,
-      role,
-      difficultyLevel,
-      selectedSections,
-      instructions,
-      experienceLevel,
-      preferredProgrammingLanguages,
-    } = req.body;
+  const { userId } = req.user;
+  const {
+    oaCategory,
+    role,
+    difficultyLevel,
+    selectedSections,
+    instructions,
+    experienceLevel,
+    preferredProgrammingLanguages,
+  } = req.body;
 
+  const mongoSession = await mongoose.startSession();
+  mongoSession.startTransaction();
+
+  try {
     if (
       !role ||
       !difficultyLevel ||
       !preferredProgrammingLanguages ||
-      !selectedSections
+      preferredProgrammingLanguages.length === 0 ||
+      !selectedSections ||
+      selectedSections.length === 0
     ) {
-      return res.status(401).json({
+      return res.status(400).json({
         success: false,
         message:
-          "Required field are important to generate test, so please select required field",
+          "Required fields (Role, Difficulty, Programming Languages, Selected Sections) are missing or empty.",
       });
     }
-
-    // gemini api call here
-
-    const test = new OATest({
-      oaCategory,
-      company: null,
-      role,
-      experienceLevel,
-      difficulty: difficultyLevel,
-      userSelectedSections: selectedSections ? [...selectedSections] : null,
-      specialInstructions: instructions ? instructions : null,
-      preferredProgrammingLanguges: [...preferredProgrammingLanguages],
-    });
 
     const prompt = generatePracticeQuestionForOATest({
       role,
@@ -122,141 +148,212 @@ export const generatePracticeTest = async (req, res) => {
       difficultyLevel,
       preferredProgrammingLanguages,
       selectedSections,
-      specialInstructions,
+      specialInstructions: instructions,
     });
-    const response = await geminiApiForTextGeneration(prompt);
 
-    response.length > 0 &&
-      response.forEach(async (element) => {
-        const section = await OATestSection.create(element);
-        if (section) {
-          test.sections.push(section?._id);
-        }
+    let llmResponse = await geminiApiForTextGeneration(prompt);
+
+    const test = new OATest({
+      user: userId,
+      oaCategory,
+      company: null,
+      role,
+      experienceLevel,
+      difficulty: difficultyLevel,
+      userSelectedSections: selectedSections || [],
+      specialInstructions: instructions || null,
+      preferredProgrammingLanguages: [...preferredProgrammingLanguages],
+      sections: [],
+    });
+
+    if (llmResponse.length > 0) {
+      const sectionPromises = llmResponse.map(async (sectionData) => {
+        const newSection = await OATestSection.create([sectionData], {
+          session: mongoSession,
+        });
+        return newSection;
       });
 
-    await test.save();
+      const createdSections = await Promise.all(sectionPromises);
+      createdSections.forEach((section) => {
+        if (section) test.sections.push(section._id);
+      });
+    }
+
+    await test.save({ session: mongoSession });
+
+    await mongoSession.commitTransaction();
 
     return res.status(201).json({
       success: true,
-      message: "Test created successfully",
-      testDetails: test,
+      message: "Practice test created successfully.",
+      testID: test._id,
     });
   } catch (error) {
-    console.log("Error in generating practice test :: ", error);
+    await mongoSession.abortTransaction();
+    console.error("Error in generatePracticeTest controller:", error);
     return res.status(500).json({
       success: false,
-      message: "Something went wrong, please try again later...",
+      message:
+        "An unexpected error occurred while generating the practice test. Please try again later.",
     });
+  } finally {
+    await mongoSession.endSession();
   }
 };
 
-export const getSections=async(req,res)=>{
+export const getSections = async (req, res) => {
   try {
-    const {testId}=req.params;
+    const { testId } = req.params;
+
     if (!testId) {
-      return res.status(401).json({
+      return res.status(400).json({
         success: false,
-        message: "Invalid request",
+        message: "Invalid Request",
       });
     }
 
-    const allSections=await OATest.findById(testId).select('sections').populate('sections');
+    const oaTest = await OATest.findById(testId)
+      .select("sections")
+      .populate("sections")
+      .exec();
 
-    if(!allSections){
-      throw new Error('Somthing went wrong 1');
-    }
-
-    return res.status(200).json({
-      success:true,
-      message:"Successfully got sections",
-      sections:allSections?.sections
-    })
-  } catch (error) {
-    console.log("Error in getting sections :: ", error);
-    return res.status(500).json({
-      success: false,
-      message: "Something went wrong, please try again later...",
-    });
-  }
-}
-export const getQuestion = async (req, res) => {
-  try {
-    const { testId, sectionId, questionId } = req.params;
-
-    if (!testId || !sectionId || !questionId) {
-      return res.status(401).json({
+    if (!oaTest) {
+      return res.status(404).json({
         success: false,
-        message: "Invalid request",
+        message: `No OA Test found with ID: ${testId}.`,
       });
     }
 
-    const section = await OATestSection.findById(sectionId).select(
-      "section_questions"
-    );
-
-    if (!section || section?.section_question.length === 0) {
-      throw new Error("Not able to create questions");
-    }
-
-    const questions = section?.section_question;
-    const question = questions?.find(
-      (question) => question?.question_id === questionId
-    );
-
-    if (!question) {
-      throw new Error("Not getting question to given question id");
-    }
-
+    console.log("OA TEST ::: ",oaTest)
     return res.status(200).json({
       success: true,
-      message: "Successfully got the question",
-      question,
+      message: "OA Test sections retrieved successfully.",
+      sections: oaTest.sections,
     });
   } catch (error) {
-    console.log("Error in getting question :: ", error);
+    console.error("Error in getSections controller:", error);
     return res.status(500).json({
       success: false,
-      message: "Something went wrong, please try again later...",
+      message:
+        "An unexpected error occurred while retrieving test sections. Please try again later.",
     });
   }
 };
 
 // for the type of question other than coding (DSA,SQL,etc)
-export const getSectionQuestions = async (req, res) => {
+export const getQuestion = async (req, res) => {
   try {
-    const { testId, sectionId } = req.params;
-    if (!testId || !sectionId) {
-      return res.status(401).json({
+    const { testId, sectionId, questionId } = req.params;
+
+    if (!testId || !sectionId || !questionId) {
+      return res.status(400).json({
         success: false,
-        message: "Invalid request",
+        message:
+          "All parameters (Test ID, Section ID, Question ID) are required.",
       });
     }
 
     const section = await OATestSection.findById(sectionId).select(
       "section_questions"
     );
-    if (!section || section?.section_question?.length === 0) {
-      throw new Error("Not able to create questions");
+
+    if (!section) {
+      return res.status(404).json({
+        success: false,
+        message: `Section with ID: ${sectionId} not found.`,
+      });
     }
 
-    const questions = section?.section_question;
-    if (!questions) {
-      throw new Error("Not getting question to given question id");
+    if (!section.section_questions || section.section_questions.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No questions found within section with ID: ${sectionId}.`,
+      });
     }
+
+    const question = section?.section_questions.find(
+      (q) => q.question_id === questionId
+    );
+
+    if (!question) {
+      return res.status(404).json({
+        success: false,
+        message: `Question with ID: ${questionId} not found in section ${sectionId}.`,
+      });
+    }
+
     return res.status(200).json({
       success: true,
-      message: "Successfully got all question of section",
-      questions,
+      message: "Question retrieved successfully.",
+      question,
     });
   } catch (error) {
-    console.log("Error in getting section questions :: ", error);
+    console.error("Error in getQuestion controller:", error);
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid ID format for one of the parameters: ${error.path}.`,
+      });
+    }
     return res.status(500).json({
       success: false,
-      message: "Something went wrong, please try again later...",
+      message:
+        "An unexpected error occurred while retrieving the question. Please try again later.",
     });
   }
 };
 
+export const getSectionQuestions = async (req, res) => {
+  try {
+    const { testId, sectionId } = req.params;
+
+    if (!testId || !sectionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Test ID and Section ID are required.",
+      });
+    }
+
+    const section = await OATestSection.findById(sectionId).select(
+      "section_questions"
+    );
+
+    if (!section) {
+      return res.status(404).json({
+        success: false,
+        message: `Section with ID: ${sectionId} not found.`,
+      });
+    }
+
+    if (!section.section_questions || section.section_questions.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: `No questions found within section with ID: ${sectionId}.`,
+        questions: [],
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Questions for section retrieved successfully.",
+      questions: section.section_questions,
+    });
+  } catch (error) {
+    console.error("Error in getSectionQuestions controller:", error);
+    if (error.name === "CastError") {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid ID format for one of the parameters: ${error.path}.`,
+      });
+    }
+    return res.status(500).json({
+      success: false,
+      message:
+        "An unexpected error occurred while retrieving section questions. Please try again later.",
+    });
+  }
+};
 /* 
 for coding section candidate will submit single question from section
 for other types : candidate will submit all the section once
@@ -341,25 +438,28 @@ export const submitSection = async (req, res) => {
 };
 
 export const submitTest = async (req, res) => {
-  try {
-    const { testId } = req.body;
-    const { userId } = req.user;
+  const { testId } = req.body;
+  const { userId } = req.user;
 
+  const mongoSession = await mongoose.startSession();
+  try {
     if (!testId) {
-      return res.status(401).json({
+      return res.status(400).json({
         success: false,
         message: "Invalid request",
       });
     }
+    mongoSession.startTransaction();
 
     const test = await OATest.findById(testId)
       .select("oaCategory company role difficulty experienceLevel sections")
-      .populate("sections");
+      .populate("sections")
+      .exec();
 
     const testContext =
-      test?.oaCategory === "company specific"
+      test?.oaCategory === "companyspecific"
         ? {
-            type: "company_specific",
+            type: "companyspecific",
             company: test?.company,
             role: test?.role,
             experienceLevel: test?.experienceLevel,
@@ -373,6 +473,8 @@ export const submitTest = async (req, res) => {
 
     const requiredSectionsData = [];
     const allTestSections = test?.sections;
+
+    console.log("ALL TEST SECTIONS ::: ", allTestSections);
 
     allTestSections?.length > 0 &&
       allTestSections.forEach((element) => {
@@ -431,7 +533,7 @@ export const submitTest = async (req, res) => {
       testId,
       { feedback: feedback },
       { new: true }
-    );
+    ).session(mongoSession);
 
     const analytics = await Analytics.findById(userId);
     const averageOaScore = analytics?.averageOaScore;
@@ -444,20 +546,23 @@ export const submitTest = async (req, res) => {
     analytics.totalOaTests = newOaTestCount;
     analytics.averageOaScore = newAverageScore;
 
-    await analytics.save();
+    await analytics.save({ session: mongoSession });
 
-    // TODO: we can use transactions.
     // TODO: very expansive controller, we can use background task queue
+    await mongoSession.commitTransaction();
     return res.status(200).json({
       success: true,
       message:
         "Test successfully submitted, score and feedback will be available on dashboard soon...",
     });
   } catch (error) {
+    await mongoSession.abortTransaction();
     console.log("Error in submitting test :: ", error);
     return res.status(500).json({
       success: false,
       message: "Something went wrong, please try again...",
     });
+  } finally {
+    await mongoSession.endSession();
   }
 };

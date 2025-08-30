@@ -25,13 +25,13 @@ const userSchema = new Schema(
 
     password: {
       type: String,
-      // required: function () {
-      //   return this.authStrategy === "local";
-      // },
+      required: function () {
+        return this.authStrategy === "local";
+      },
       minlength: 3,
     },
 
-    additionalDetailes: {
+    additionalDetails: {
       type: Schema.Types.ObjectId,
       ref: "Profile",
     },

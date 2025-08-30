@@ -10,16 +10,17 @@ const oaTestSchema = new mongoose.Schema(
 
     oaCategory: {
       type: String,
-      enum: ["company specific", "practice"],
-      default: "company specific",
+      enum: ["companyspecific", "practice"],
+      default: "companyspecific",
     },
 
     company: { type: String, required: true },
 
-    role: { type: String },
+    role: { type: String, required:true},
 
     experienceLevel: {
       type: String,
+      required:true
     },
 
     difficulty: {

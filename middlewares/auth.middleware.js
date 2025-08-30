@@ -1,33 +1,36 @@
 import Session from "../models/Session.model.js";
 
-const auth = async(req, res, next) => {
+const auth = async (req, res, next) => {
   const { session_id } = req.signedCookies;
 
   try {
     if (!session_id) {
       res.clearCookie("session_id");
-      res.status(401).json({
+      return res.status(401).json({
         success: false,
-        message: "Please do login",
+        message: "Authentication required. Please log in.",
       });
     }
 
-    const userSession=await Session.findById(session_id);
-    if(!userSession){
-        return res.status(404).json({
-            success:false,
-            message:"Unauthorize, please do login"
-        })
+    const userSession = await Session.findById(session_id);
+    if (!userSession) {
+      res.clearCookie("session_id");
+      return res.status(401).json({
+        success: false,
+        message: "Invalid session. Please log in again.",
+      });
     }
 
     console.log("User Session :: ", userSession?.user);
-    req.user.userId=userSession?.user;
-    next()
+
+    req.user = req.user || {};
+    req.user.userId = userSession.user;
+    next();
   } catch (error) {
     console.log("Error in auth middleware :: ", error);
     return res.status(500).json({
       success: false,
-      message: "Somrthing went wrong, please login again",
+      message: "Something went wrong, please login again, auth",
     });
   }
 };

@@ -2,38 +2,44 @@ import { model, Schema } from "mongoose";
 
 const profileSchema = new Schema({
   personalInformation: {
-    avatar: {
-      type: String,
-    },
     mobileNumber: {
-      type: Number,
+      type: String,
+      default:""
     },
     address: {
       type: String,
+      default:""
     },
     website: {
       type: String,
+      default:""
     },
     linkedinUrl: {
       type: String,
+      default:""
     },
     bio: {
       type: String,
+      default:""
     },
     gender: {
       type: String,
+      default:""
     },
   },
 
   professionalInformation: {
     currentRole: {
       type: String,
+      default:""
     },
     targetedRole: {
       type: String,
+      default:""
     },
     experienceLevel: {
       type: String,
+      default:""
     },
     skills: [
       {
@@ -71,6 +77,7 @@ const profileSchema = new Schema({
   },
   resumeUrl: {
     type: String,
+    default:""
   },
 },{timestamps:true});
 

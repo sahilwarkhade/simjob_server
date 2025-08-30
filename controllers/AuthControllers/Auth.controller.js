@@ -22,30 +22,29 @@ export const registerUser = async (req, res) => {
   mongoSession.startTransaction();
   try {
     if (!fullName || !email || !password || !confirmPassword || !otp) {
-      return res.status(403).json({
+      return res.status(400).json({
         success: false,
         message: "All fields are required",
       });
     }
     if (password !== confirmPassword) {
-      return res.status(401).json({
+      return res.status(400).json({
         success: false,
         message: "Password and confirm password should match",
       });
     }
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email }).session(mongoSession);
     if (existingUser) {
       return res
-        .status(400)
+        .status(409)
         .json({ success: false, message: "Email already registered." });
     }
 
-    const otpRecord = await OTP.findOne({ email, otp }).select("otp").lean();
-    if (
-      !otpRecord ||
-      otpRecord.length === 0 ||
-      otpRecord.otp !== otp.toString()
-    ) {
+    const otpRecord = await OTP.findOne({ email, otp })
+      .select("otp")
+      .lean()
+      .session(mongoSession);
+    if (!otpRecord) {
       return res.status(400).json({
         success: false,
         message: "OTP is not valid, please enter valid otp",
@@ -54,8 +53,8 @@ export const registerUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const additionalDetailes = new Profile();
-    await additionalDetailes.save({ session: mongoSession });
+    const additionalDetails = new Profile();
+    await additionalDetails.save({ session: mongoSession });
 
     const user = new User({
       fullName,
@@ -63,7 +62,7 @@ export const registerUser = async (req, res) => {
       password: hashedPassword,
       accountType: "candidate",
       authStrategy: "local",
-      additionalDetailes: additionalDetailes._id,
+      additionalDetails: additionalDetails._id,
     });
 
     await user.save({ session: mongoSession });
@@ -80,16 +79,42 @@ export const registerUser = async (req, res) => {
       improvementSuggestions: "",
     });
 
-    await userAnalytics.save();
+    await userAnalytics.save({ session: mongoSession });
 
+    const newSession = new Session({
+      user: user._id,
+    });
+
+    await newSession.save({ session: mongoSession });
+
+    const cookieOptions = {
+      httpOnly: true,
+      signed: true,
+      secure: true,
+      maxAge: 1000 * 60 * 60 * 24 * 7,
+    };
+
+    res.cookie("session_id", newSession._id, cookieOptions);
     await mongoSession.commitTransaction();
-    return res
-      .status(201)
-      .json({ success: true, message: "User registered successfully.", user });
+
+    return res.status(201).json({
+      success: true,
+      message: "User registered successfully.",
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        accountType: user.accountType,
+        avatar: user.avatar,
+      },
+    });
   } catch (err) {
     await mongoSession.abortTransaction();
     console.log("error in resgister", err);
-    res.status(500).json({ success: false, message: "Server error." });
+    res.status(500).json({
+      success: false,
+      message: "An unexpected server error occurred. Please try again later.",
+    });
   } finally {
     await mongoSession.endSession();
   }
@@ -99,7 +124,7 @@ export const loginUser = async (req, res) => {
   const { email, password } = req.body;
   try {
     if (!email || !password) {
-      return res.status(403).json({
+      return res.status(400).json({
         success: false,
         message: "All fields are required",
       });
@@ -115,7 +140,7 @@ export const loginUser = async (req, res) => {
     if (!user.password || user.password.length === 0) {
       return res.status(401).json({
         success: false,
-        message: `You were sign up using ${user.authStrategy}, so use ${user.authStrategy} or do forget password`,
+        message: `Invalid credentials`,
       });
     }
 
@@ -126,14 +151,14 @@ export const loginUser = async (req, res) => {
         .json({ success: false, message: "Invalid credentials." });
     }
 
-    const isAlredyUserLoginWithSameCredentials = await Session.find({
-      user: user._id,
-    });
+    // const isAlredyUserLoginWithSameCredentials = await Session.find({
+    //   user: user._id,
+    // });
 
-    if (isAlredyUserLoginWithSameCredentials.length > 0) {
-      await Session.deleteMany({ user: user._id });
-      res.clearCookie("session_id");
-    }
+    // if (isAlredyUserLoginWithSameCredentials.length > 0) {
+    await Session.deleteMany({ user: user._id });
+    res.clearCookie("session_id");
+    // }
 
     const session = new Session({ user: user._id });
 
@@ -145,47 +170,47 @@ export const loginUser = async (req, res) => {
       secure: true,
       maxAge: 1000 * 60 * 60 * 24 * 7,
     };
-    return res
-      .cookie("session_id", session._id, cookieOptions)
-      .status(200)
-      .json({
-        success: true,
-        message: "Logged in successfull",
-        user,
-      });
+
+    res.cookie("session_id", session._id, cookieOptions);
+
+    return res.status(200).json({
+      success: true,
+      message: "Logged in successfull",
+    });
   } catch (err) {
     console.log("Error in login user :: ", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Something went wrong..." });
+    return res.status(500).json({
+      success: false,
+      message: "An unexpected server error occurred. Please try again later.",
+    });
   }
 };
 
 export const updatePassword = async (req, res) => {
   const { userId } = req.user;
-  const { currentPassword, newPassword } = req.body;
+  const { currentPassword, newPassword, newConfirmPassword } = req.body;
 
   try {
-    if (!userId) {
-      return res.status(401).json({
+    if (!newPassword || !newConfirmPassword) {
+      return res.status(400).json({
         success: false,
-        message: "Please, login again...",
+        message: "New password and confirm password are required.",
+      });
+    }
+    if (newPassword !== newConfirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "New password and confirm password should match.",
       });
     }
 
-    if (!newPassword) {
-      return res.status(403).json({
-        success: false,
-        message: "All fields are required",
-      });
-    }
     const user = await User.findById(userId);
 
     if (user.authStrategy === "local") {
       if (!currentPassword) {
-        return res.status(403).json({
+        return res.status(400).json({
           success: false,
-          message: "current password required",
+          message: "Current password is required to change password.",
         });
       }
       const isPasswordCorrect = await bcrypt.compare(
@@ -198,31 +223,39 @@ export const updatePassword = async (req, res) => {
           message: "please, enter correct current password",
         });
       }
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: `You registered via ${user.authStrategy}. Please change your password through ${user.authStrategy} or use the 'Forgot Password' link to set a local password.`,
+      });
     }
-    const newHashedPassword = await bcrypt.hash(newPassword, 10);
+
+    const newHashedPassword = await bcrypt.hash(newPassword, 12);
 
     user.password = newHashedPassword;
 
     await user.save();
 
-    const isAlredyUserLoginWithSameCredentials = await Session.find({
-      user: user._id,
-    });
+    // const isAlredyUserLoginWithSameCredentials = await Session.find({
+    //   user: user._id,
+    // });
 
-    if (isAlredyUserLoginWithSameCredentials.length > 0) {
-      await Session.deleteMany({ user: user._id });
-      res.clearCookie("session_id");
-    }
+    // if (isAlredyUserLoginWithSameCredentials.length > 0) {
+    await Session.deleteMany({ user: user._id });
+    res.clearCookie("session_id");
+    // }
 
     return res.status(200).json({
       success: true,
-      message: "Password changed successfully",
+      message:
+        "Password changed successfully. Please log in with your new password.",
     });
   } catch (error) {
     console.log("Error in updating password :: ", error);
     return res.status(500).json({
       success: false,
-      message: "Something went wrong please try again later...",
+      message:
+        "An unexpected error occurred during password update. Please try again later.",
     });
   }
 };
@@ -231,13 +264,26 @@ export const sendOtp = async (req, res) => {
   const { email, type } = req.body;
   try {
     if (!email || !type) {
-      return res.status(403).json({
+      return res.status(400).json({
         success: false,
-        message: "All fields are required",
+        message: "Email and OTP type are required.",
       });
     }
 
-    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+    if (type !== "signup") {
+      const user = await User.findOne({ email: email })
+        .select("fullName")
+        .lean();
+      if (!user) {
+        return res.status(200).json({
+          success: true,
+          message:
+            "If an account with that email exists, an OTP has been sent.",
+        });
+      }
+    }
+
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
     await OTP.findOneAndUpdate(
       { email },
@@ -252,7 +298,7 @@ export const sendOtp = async (req, res) => {
         otpTemplate(otpCode)
       );
 
-      console.log("SIGN UP")
+      console.log("SIGN UP");
     } else {
       await mailSender(
         email,
@@ -276,22 +322,18 @@ export const sendOtp = async (req, res) => {
 
 export const verifyOtp = async (req, res) => {
   const { email, otp } = req.body;
-  console.log("OTP :: ", otp)
+
   try {
     if (!email || !otp) {
-      return res.status(403).json({
+      return res.status(400).json({
         success: false,
-        message: "All fields are required",
+        message: "Email and OTP are required",
       });
     }
 
     const otpRecord = await OTP.findOne({ email, otp }).select("otp").lean();
-    console.log("OTP RECORD :: ", otpRecord)
-    if (
-      !otpRecord ||
-      otpRecord.length === 0 ||
-      otpRecord.otp !== otp
-    ) {
+
+    if (!otpRecord) {
       return res.status(400).json({
         success: false,
         message: "OTP is not valid, please enter valid otp",
@@ -300,7 +342,7 @@ export const verifyOtp = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Opt verified successfully",
+      message: "OTP verified successfully",
     });
   } catch (error) {
     console.log("Error in verifying otp :: ", error);
@@ -315,39 +357,42 @@ export const forgetPassword = async (req, res) => {
   const { email, newPassword, newConfirmPassword } = req.body;
 
   try {
-    if (!email || !newPassword || !newConfirmPassword) {
-      return res.status(403).json({
+    if (!newPassword || !newConfirmPassword) {
+      return res.status(400).json({
         success: false,
-        message: "All fields are required",
+        message: "New password and confirm password are required.",
       });
     }
     if (newPassword !== newConfirmPassword) {
-      throw new Error("Password and confirm password should match");
+      return res.status(400).json({
+        success: false,
+        message: "Password and confirm password should match.",
+      });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select("password");
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User is not registered, please register user",
+        message: "User is not registered.",
       });
     }
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
 
     user.password = hashedPassword;
 
     await user.save();
 
-    const isAlredyUserLoginWithSameCredentials = await Session.find({
-      user: user._id,
-    });
+    // const isAlredyUserLoginWithSameCredentials = await Session.find({
+    //   user: user._id,
+    // });
 
-    if (isAlredyUserLoginWithSameCredentials.length > 0) {
-      await Session.deleteMany({ user: user._id });
-      res.clearCookie("session_id");
-    }
+    // if (isAlredyUserLoginWithSameCredentials.length > 0) {
+    await Session.deleteMany({ user: user._id });
+    res.clearCookie("session_id");
+    // }
 
     return res.status(200).json({
       success: true,
@@ -416,8 +461,8 @@ export const continueWithGoogle = async (req, res) => {
 
       session = await Session.create({ user: user._id });
     } else {
-      const additionalDetailes = new Profile();
-      await additionalDetailes.save({ session: mongoSession });
+      const additionalDetails = new Profile();
+      await additionalDetails.save({ session: mongoSession });
 
       const newUser = new User({
         fullName: name,
@@ -426,7 +471,7 @@ export const continueWithGoogle = async (req, res) => {
         authStrategy: "google",
         accountType: "candidate",
         google: sub,
-        additionalDetailes: additionalDetailes._id,
+        additionalDetails: additionalDetails._id,
       });
 
       await newUser.save({ session: mongoSession });
@@ -508,14 +553,14 @@ export const continueWithGitHub = async (req, res) => {
     } else {
       const profile = await getUserProfile(access_token);
 
-      const additionalDetailes = new Profile();
-      await additionalDetailes.save({ session: mongoSession });
+      const additionalDetails = new Profile();
+      await additionalDetails.save({ session: mongoSession });
 
       const newUser = new User({
         fullName: profile?.name,
         email: primaryEmail,
         authStrategy: "github",
-        additionalDetailes: additionalDetailes?._id,
+        additionalDetails: additionalDetails?._id,
         accountType: "candidate",
         avatar: profile?.avatar_url,
         github: profile?.id.toString(),

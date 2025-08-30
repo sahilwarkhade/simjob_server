@@ -11,11 +11,13 @@ import DashboardRoutes from "./routes/Dashboard.route.js"
 import ContactUsRoutes from './routes/Contactus.route.js'
 import { connectCloudinary } from "./config/Cloudinary.js";
 import cookieParser from "cookie-parser";
+import { checkLogin } from "./middlewares/check.middleware.js";
 
 await connectDB();
 await connectCloudinary();
 
 const allowedOrigins = [
+  'http://localhost:4173',
   'http://localhost:5173', 
 ];
 
@@ -37,6 +39,7 @@ const cookieSecret=process.env.COOKIE_SECRET;
 app.use(cookieParser(cookieSecret));
 app.use(express.json());
 
+app.use('/api/v1/check',checkLogin)
 app.use('/api/v1/auth',AuthRoutes);
 app.use('/api/v1/user',DashboardRoutes);
 app.use('/api/v1/mockinterview',MockInterviewRoutes);

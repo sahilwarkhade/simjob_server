@@ -5,194 +5,189 @@ import OATest from "../../models/OATest.model.js";
 import Profile from "../../models/Profile.model.js";
 import User from "../../models/User.model.js";
 import { uploadToCloudinary } from "../../utils/Upload/uploadToCloudinary.js";
-
+import Session from "../../models/Session.model.js";
 
 export const getUserProfileDetails = async (req, res) => {
   const { userId } = req.user;
 
   try {
-    const user = await User.findOne({ _id: userId })
-      .select("-password")
-      .populate("additionalDetailes")
+    const user = await User.findById(userId)
+      .select("-password -google -github")
+      .populate("additionalDetails")
       .exec();
 
     if (!user) {
-      return res.status(401).json({
+      return res.status(404).json({
         success: false,
-        message: "Not able to find user",
+        message: "User not found.",
       });
     }
 
+    console.log("USER DETAILES :: ", user);
     return res.status(200).json({
       success: true,
-      message: "Successfully get all user details",
+      message: "User profile details retrieved successfully.",
       user,
     });
   } catch (error) {
     console.log("Error in getting user profile details :: ", error);
     return res.status(500).json({
       success: false,
-      message: "Something went wrong while getting user profile...",
+      message:
+        "An unexpected error occurred while retrieving user profile. Please try again later.",
     });
   }
 };
 
-export const updateUserPersonalDetailes = async (req, res) => {
+export const updateUserPersonalDetails = async (req, res) => {
   const { userId } = req.user;
-  const { bio, gender, mobileNumber, address, website, linkedin } = req.body;
-  try {
-    const user = await User.findOne({ _id: userId }).select(
-      "additionalDetailes"
-    );
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "User not valid",
-      });
-    }
-    const userProfile = await Profile.findOne({
-      _id: user?.additionalDetailes,
-    }).select("personalInformation");
 
-    if (!userProfile) {
-      return res.status(401).json({
-        success: false,
-        message: "Not able to get user profile",
-      });
-    }
-
-    userProfile.personalInformation.address = address;
-    userProfile.personalInformation.bio = bio;
-    userProfile.personalInformation.gender = gender;
-    userProfile.personalInformation.mobileNumber = mobileNumber;
-    userProfile.personalInformation.website = website;
-    userProfile.personalInformation.linkedinUrl = linkedin;
-
-    await userProfile.save();
-
-    const updatedPersonalDetails = await Profile.findById(
-      user?.additionalDetailes
-    ).select("personalInformation");
-
-    if (!updatedPersonalDetails) {
-      throw new Error("Something went wrong...");
-    }
-
-    return res.status(201).json({
-      success: true,
-      message: "Personal details successully updated",
-      updatedPersonalDetails,
-    });
-  } catch (error) {
-    console.log("Error in updating user personal details :: ", error);
-    return res.status(500).json({
-      success: false,
-      message: "Something went wrong while updating user personal details...",
-    });
-  }
-};
-
-export const updateUserProfessionalDetailes = async (req, res) => {
-  const { userId } = req.user;
-  const { currentRole, targetRole, experienceLevel, skills, targetCompanies } =
+  const { fullName, bio, gender, mobileNumber, address, website, linkedinUrl } =
     req.body;
 
   try {
-    const user = await User.findOne({ _id: userId }).select(
-      "additionalDetailes"
-    );
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "User not valid",
-      });
-    }
-    const userProfile = await Profile.findOne({
-      _id: user?.additionalDetailes,
-    }).select("professionalInformation");
+    const user = await User.findById(userId)
+      .select("additionalDetails")
+      .populate({
+        path: "additionalDetails",
+        select: "personalInformation",
+      })
+      .exec();
 
-    if (!userProfile) {
-      return res.status(401).json({
+    if (!user || !user.additionalDetails) {
+      return res.status(404).json({
         success: false,
-        message: "Not able to get user profile",
+        message: "User or associated profile not found.",
       });
     }
 
-    userProfile.professionalInformation.currentRole = currentRole;
-    userProfile.professionalInformation.targetedRole = targetRole;
-    userProfile.professionalInformation.experienceLevel = experienceLevel;
-    userProfile.professionalInformation.skills = skills;
-    userProfile.professionalInformation.targetCompanies = targetCompanies;
+    const userProfile = user?.additionalDetails;
+    if (fullName !== undefined) user.fullName = fullName;
+    if (bio !== undefined) userProfile.personalInformation.bio = bio;
+    if (gender !== undefined) userProfile.personalInformation.gender = gender;
+    if (mobileNumber !== undefined)
+      userProfile.personalInformation.mobileNumber = mobileNumber;
+    if (address !== undefined)
+      userProfile.personalInformation.address = address;
+    if (website !== undefined)
+      userProfile.personalInformation.website = website;
+    if (linkedinUrl !== undefined)
+      userProfile.personalInformation.linkedinUrl = linkedinUrl;
 
     await userProfile.save();
+    await user.save();
+    console.log(
+      "USER PROFILE UPDATE PERSONAL :: ",
+      userProfile.personalInformation
+    );
 
-    const updatedProfessionalDetails = await Profile.findById(
-      user?.additionalDetailes
-    ).select("professionalInformation");
-
-    if (!updatedProfessionalDetails) {
-      throw new Error(
-        "Something went wrong while getting Professional Information..."
-      );
-    }
-
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
-      message: "Professional details successully updated",
-      updatedProfessionalDetails,
+      message: "Personal details successfully updated.",
+      updatedPersonalDetails: userProfile.personalInformation,
     });
   } catch (error) {
-    console.log("Error in updating user professional details :: ", error);
+    console.error("Error in updateUserPersonalDetails controller:", error);
+
     return res.status(500).json({
       success: false,
       message:
-        "Something went wrong while updating user professional details...",
+        "An unexpected error occurred while updating personal details. Please try again later.",
+    });
+  }
+};
+
+export const updateUserProfessionalDetails = async (req, res) => {
+  const { userId } = req.user; 
+  const { currentRole, targetRole, experience, skills, targetCompanies } = req.body;
+
+  try {
+    const user = await User.findById(userId)
+      .select('additionalDetails')
+      .populate({
+        path: 'additionalDetails',
+        select: 'professionalInformation'
+      })
+      .exec();
+    
+    if (!user || !user.additionalDetails) {
+      return res.status(404).json({ 
+        success: false,
+        message: "User or associated profile not found.",
+      });
+    }
+
+    const userProfile = user.additionalDetails; 
+    
+    if (currentRole !== undefined) userProfile.professionalInformation.currentRole = currentRole;
+    if (targetRole !== undefined) userProfile.professionalInformation.targetedRole = targetRole; 
+    if (experience !== undefined) userProfile.professionalInformation.experienceLevel = experience;
+    if (skills !== undefined) userProfile.professionalInformation.skills = skills;
+    if (targetCompanies !== undefined) userProfile.professionalInformation.targetCompanies = targetCompanies;
+
+    await userProfile.save(); 
+
+    return res.status(200).json({ 
+      success: true,
+      message: "Professional details successfully updated.",
+      updatedProfessionalDetails: userProfile.professionalInformation, 
+    });
+
+  } catch (error) {
+    console.error("Error in updateUserProfessionalDetails controller:", error); 
+    return res.status(500).json({
+      success: false,
+      message: "An unexpected error occurred while updating professional details. Please try again later.",
     });
   }
 };
 
 export const updateProfile = async (req, res) => {
   const { userId } = req.user;
-  const profile = req.file;
+  const profileImage = req.file;
 
-  if (!profile) {
+  if (!profileImage) {
     return res.status(400).json({
       success: false,
-      message: "select profile",
+      message: "Select profile",
     });
   }
-  const profileTempPath = profile?.path;
-
+  const profileTempPath = profileImage?.path;
+  const fileExtension = profileImage.mimetype.split("/")[1];
+  
+  
   try {
-    const user = await User.find({ _id: userId }).select("additionalDetailes");
+    const user = await User.findById(userId);
     if (!user) {
-      return res.status.json({
+      return res.status(404).json({
         success: false,
         message: "Not able to find user",
       });
     }
 
-    const userProfile = await Profile.findOne({
-      _id: user?.additionalDetailes,
-    }).select("personalInformation");
+    const result = await uploadToCloudinary(
+      profileTempPath,
+      "simjob_users_profile",
+      fileExtension,
+      "image"
+    );
+    
+    const secure_url = result?.secure_url;
 
-    const result=await uploadToCloudinary(profileTempPath,"simjob_users_profile","jpg","image");
-    const secure_url=result?.value?.secure_url;
-
-    if(!secure_url){
-        return res.status(400).json({
-            success:false,
-            message:"Fail to upload, please try again after some time..."
-        })
+    if (!secure_url) {
+      return res.status(503).json({
+        success: false,
+        message: "Fail to upload, please try again after some time...",
+      });
     }
-    userProfile.personalInformation.avatar=secure_url;
-    await userProfile.save();
+    user.avatar = secure_url;
+    await user.save();
 
     return res.status(200).json({
-        success:true,
-        message:"Profile Updated successfully",
-        secure_url
-    })
+      success: true,
+      message: "Profile Updated successfully",
+      avatar:user.avatar
+    });
   } catch (error) {
     console.log("Error in updating user professional details :: ", error);
     return res.status(500).json({
@@ -204,39 +199,57 @@ export const updateProfile = async (req, res) => {
 };
 
 export const deleteAccount = async (req, res) => {
-  const { userId } = req.user;
-  const mongodbSession=await mongoose.startSession();
+  const { userId } = req.user; 
+
+  const mongoSession = await mongoose.startSession();
+  mongoSession.startTransaction(); 
+
   try {
     const user = await User.findOne({ _id: userId }).select(
-      "additionalDetailes"
-    );
+      "additionalDetails"
+    ).session(mongoSession); 
+
     if (!user) {
-      return res.status(401).json({
+      await mongoSession.abortTransaction(); 
+      return res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "User not found.",
       });
     }
-    mongodbSession.startTransaction()
-    await Analytics.findOneAndDelete({ user:userId });
-    await Profile.findOneAndDelete({ _id: user?.additionalDetailes });
-    await MockInterview.deleteMany({ user: userId });
-    await OATest.deleteMany({ user: userId });
-    await User.findOneAndDelete({ _id: userId });
-    await mongodbSession.commitTransaction()
+    
+    if (!user.additionalDetails) {
+        console.warn(`User ${userId} found but missing additionalDetails reference. Proceeding with other deletions.`);
+    }
+
+    await Analytics.findOneAndDelete({ user: userId }).session(mongoSession); 
+    
+    if (user.additionalDetails) {
+        await Profile.findOneAndDelete({ _id: user.additionalDetails }).session(mongoSession);
+    }
+    
+    await MockInterview.deleteMany({ user: userId }).session(mongoSession); 
+    await OATest.deleteMany({ user: userId }).session(mongoSession);
+    await Session.deleteMany({ user: userId }).session(mongoSession);     
+
+    await User.findOneAndDelete({ _id: userId }).session(mongoSession);
+
+    await mongoSession.commitTransaction();
+
+    res.clearCookie("session_id");
+
     return res.status(200).json({
       success: true,
-      message: "Account deleted successfully",
+      message: "Account deleted successfully.",
     });
+
   } catch (error) {
-    await mongodbSession.abortTransaction();
-    console.log("Error in deleting user :: ", error);
+    await mongoSession.abortTransaction();
+    console.error("Error in deleteAccount controller:", error);
     return res.status(500).json({
       success: false,
-      message:
-        "Something went wrong while deleting user, please try again after some time",
+      message: "An unexpected error occurred while deleting the account. Please try again later.",
     });
-  }
-  finally{
-    mongodbSession.endSession();
+  } finally {
+    await mongoSession.endSession();
   }
 };

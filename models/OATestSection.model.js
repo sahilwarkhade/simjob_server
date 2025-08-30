@@ -43,7 +43,7 @@ const OATestSectionSchema = new Schema(
 
         options: [
           {
-            text: { type: String, required: true },
+            text: { type: String },
             isCorrect: { type: Boolean, required: true, default: false },
           },
         ], // For multiple-choice or single-choice questions
@@ -56,7 +56,7 @@ const OATestSectionSchema = new Schema(
       {
         question_id: {
           type: String,
-          required: true,
+          // required: true,
         },
         submitted_answer: {
           type: String,
