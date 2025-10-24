@@ -17,10 +17,10 @@ const router = express.Router();
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.post("/google", continueWithGoogle);
+router.get("/github/callback", continueWithGitHub);
 router.post("/send-otp", sendOtp);
 router.post("/verify-otp", verifyOtp);
 router.post("/forget-password", forgetPassword);
-router.get("/github/callback", continueWithGitHub);
 router.post("/logout", auth, logOut);
 router.post("/update-password", auth, updatePassword);
 

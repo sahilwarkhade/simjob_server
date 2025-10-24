@@ -1,49 +1,65 @@
 import mongoose, { Schema } from "mongoose";
 
-const mockInterviewSchema = new mongoose.Schema({
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true,
-  },
-  mockCategory: {
-    type: String,
-    enum: ["company specific", "skill based"],
-    default: "company specific",
-  },
-  companyName: {
-    type: String,
-  },
-  skills: [{ type: String }],
-  role: {
-    type: String,
-  },
-  experienceLevel: {
-    type: String,
-  },
-  focusArea: {
-    type: String,
-  },
-  difficultyLevel: {
-    type: String,
-    enum: ["Easy", "Medium", "Hard", "Expert"],
-    default: "Medium",
-  },
-  duration: { type: Number },
-  specialIntructions: {
-    type: String,
-  },
-  questions: [
-    {
+const mockInterviewSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    mockCategory: {
+      type: String,
+      enum: ["companyspecific", "skillbased"],
+      lowercase: true,
+      required: true,
+    },
+    companyName: {
+      type: String,
+      required: function () {
+        return this.mockCategory === "companyspecific";
+      },
+    },
+    skills: [
+      {
+        type: String,
+        required: function () {
+          return this.mockCategory === "skillbased";
+        },
+      },
+    ],
+    role: {
+      type: String,
+      required: function () {
+        return this.mockCategory === "companyspecific";
+      },
+    },
+    experienceLevel: {
+      type: String,
+      required: true,
+    },
+    difficultyLevel: {
+      type: String,
+      enum: ["Easy", "Medium", "Hard", "Expert", ""],
+      default: "",
+    },
+    duration: {
+      type: Number,
+    },
+    feedback: {
       type: Schema.Types.Mixed,
     },
-  ],
-  feedback: {
-    type: Schema.Types.Mixed,
+    transcript: { type: String },
+    status: {
+      type: String,
+      enum: ["pending", "submitted"],
+    },
+    score: {
+      type: Number,
+      default:0
+    },
   },
-  // transcript: { type: String }, // full STT transcript
-  // audioURL: { type: String }, // optional: store audio file for playback
-
-},{timestamps:true});
+  { timestamps: true }
+);
 
 export default mongoose.model("MockInterview", mockInterviewSchema);

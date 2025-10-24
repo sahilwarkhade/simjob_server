@@ -11,7 +11,7 @@ const router = express.Router();
 
 router.get("/stats", auth, getUserStats);
 router.get("/recentsessions", auth, getRecentSessions);
-router.get("/allsessions", auth, getHistory);
+router.get("/history", auth, getHistory);
 router.get("/progress", auth, getUserProgress);
 
 export default router;

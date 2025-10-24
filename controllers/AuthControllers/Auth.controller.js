@@ -1,40 +1,44 @@
+import { z } from "zod";
 import mongoose from "mongoose";
 import User from "../../models/User.model.js";
 import bcrypt from "bcrypt";
 import Profile from "../../models/Profile.model.js";
 import Analytics from "../../models/Analytics.model.js";
 import OTP from "../../models/OTP.model.js";
-import { mailSender } from "../../utils/SendEmail/index.js";
 import { otpTemplate } from "../../templates/Email/registrationOtp.js";
 import { forgetPasswordOtpTemplate } from "../../templates/Email/forgetPasswordOpt.js";
-import Session from "../../models/Session.model.js";
 import { getTokenData } from "../../utils/GoogleAuth/index.js";
 import {
   getAccessToken,
   getPrimaryEmail,
   getUserProfile,
 } from "../../utils/GithubAuth/index.js";
+import {
+  createSession,
+  deleteSession,
+  invalidateAllUserSessions,
+} from "../../utils/Sessions/index.js";
+import { emailQueue } from "../../config/bullMq.js";
+import {
+  forgetPasswordSchema,
+  loginSchema,
+  sendOtpSchema,
+  signupSchema,
+  updatePasswordSchema,
+  verifyOtpSchema,
+} from "../../validators/authValidators.js";
 
 export const registerUser = async (req, res) => {
-  const { fullName, email, password, confirmPassword, otp } = req.body;
-
   const mongoSession = await mongoose.startSession();
   mongoSession.startTransaction();
+
   try {
-    if (!fullName || !email || !password || !confirmPassword || !otp) {
-      return res.status(400).json({
-        success: false,
-        message: "All fields are required",
-      });
-    }
-    if (password !== confirmPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "Password and confirm password should match",
-      });
-    }
+    const validatedBody = signupSchema.parse(req.body);
+    const { fullName, email, password, otp } = validatedBody;
+
     const existingUser = await User.findOne({ email }).session(mongoSession);
     if (existingUser) {
+      await mongoSession.abortTransaction();
       return res
         .status(409)
         .json({ success: false, message: "Email already registered." });
@@ -45,6 +49,7 @@ export const registerUser = async (req, res) => {
       .lean()
       .session(mongoSession);
     if (!otpRecord) {
+      await mongoSession.abortTransaction();
       return res.status(400).json({
         success: false,
         message: "OTP is not valid, please enter valid otp",
@@ -81,20 +86,23 @@ export const registerUser = async (req, res) => {
 
     await userAnalytics.save({ session: mongoSession });
 
-    const newSession = new Session({
-      user: user._id,
-    });
+    const sessionId = await createSession(user._id.toString());
 
-    await newSession.save({ session: mongoSession });
+    if (!sessionId) {
+      await mongoSession.abortTransaction();
+      return res
+        .status(429)
+        .json({ message: "Maximum number of active sessions reached." });
+    }
 
     const cookieOptions = {
       httpOnly: true,
       signed: true,
       secure: true,
-      maxAge: 1000 * 60 * 60 * 24 * 7,
+      maxAge: 1000 * 60 * 60 * 24,
     };
 
-    res.cookie("session_id", newSession._id, cookieOptions);
+    res.cookie("session_id", sessionId, cookieOptions);
     await mongoSession.commitTransaction();
 
     return res.status(201).json({
@@ -110,7 +118,15 @@ export const registerUser = async (req, res) => {
     });
   } catch (err) {
     await mongoSession.abortTransaction();
-    console.log("error in resgister", err);
+
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input data",
+        errors: err.flatten().fieldErrors,
+      });
+    }
+    console.log("error in register", err);
     res.status(500).json({
       success: false,
       message: "An unexpected server error occurred. Please try again later.",
@@ -121,14 +137,9 @@ export const registerUser = async (req, res) => {
 };
 
 export const loginUser = async (req, res) => {
-  const { email, password } = req.body;
   try {
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: "All fields are required",
-      });
-    }
+    const validatedBody = loginSchema.parse(req.body);
+    const { email, password } = validatedBody;
 
     const user = await User.findOne({ email });
     if (!user) {
@@ -151,33 +162,36 @@ export const loginUser = async (req, res) => {
         .json({ success: false, message: "Invalid credentials." });
     }
 
-    // const isAlredyUserLoginWithSameCredentials = await Session.find({
-    //   user: user._id,
-    // });
+    const sessionId = await createSession(user?._id);
 
-    // if (isAlredyUserLoginWithSameCredentials.length > 0) {
-    await Session.deleteMany({ user: user._id });
-    res.clearCookie("session_id");
-    // }
-
-    const session = new Session({ user: user._id });
-
-    await session.save();
+    if (!sessionId) {
+      return res
+        .status(429)
+        .json({ message: "Maximum number of active sessions reached." });
+    }
 
     const cookieOptions = {
       httpOnly: true,
       signed: true,
       secure: true,
-      maxAge: 1000 * 60 * 60 * 24 * 7,
+      maxAge: 1000 * 60 * 60 * 24,
     };
 
-    res.cookie("session_id", session._id, cookieOptions);
+    res.cookie("session_id", sessionId, cookieOptions);
 
     return res.status(200).json({
       success: true,
-      message: "Logged in successfull",
+      message: "Logged in successfully",
     });
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input data",
+        errors: err.flatten().fieldErrors,
+      });
+    }
+
     console.log("Error in login user :: ", err);
     return res.status(500).json({
       success: false,
@@ -188,21 +202,10 @@ export const loginUser = async (req, res) => {
 
 export const updatePassword = async (req, res) => {
   const { userId } = req.user;
-  const { currentPassword, newPassword, newConfirmPassword } = req.body;
 
   try {
-    if (!newPassword || !newConfirmPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "New password and confirm password are required.",
-      });
-    }
-    if (newPassword !== newConfirmPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "New password and confirm password should match.",
-      });
-    }
+    const validatedBody = updatePasswordSchema.parse(req.body);
+    const { currentPassword, newPassword } = validatedBody;
 
     const user = await User.findById(userId);
 
@@ -220,7 +223,7 @@ export const updatePassword = async (req, res) => {
       if (!isPasswordCorrect) {
         return res.status(400).json({
           success: false,
-          message: "please, enter correct current password",
+          message: "Please, enter the correct current password.",
         });
       }
     } else {
@@ -231,19 +234,10 @@ export const updatePassword = async (req, res) => {
     }
 
     const newHashedPassword = await bcrypt.hash(newPassword, 12);
-
     user.password = newHashedPassword;
-
     await user.save();
 
-    // const isAlredyUserLoginWithSameCredentials = await Session.find({
-    //   user: user._id,
-    // });
-
-    // if (isAlredyUserLoginWithSameCredentials.length > 0) {
-    await Session.deleteMany({ user: user._id });
-    res.clearCookie("session_id");
-    // }
+    await invalidateAllUserSessions(user._id);
 
     return res.status(200).json({
       success: true,
@@ -251,6 +245,14 @@ export const updatePassword = async (req, res) => {
         "Password changed successfully. Please log in with your new password.",
     });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input data",
+        errors: error.flatten().fieldErrors,
+      });
+    }
+
     console.log("Error in updating password :: ", error);
     return res.status(500).json({
       success: false,
@@ -261,24 +263,17 @@ export const updatePassword = async (req, res) => {
 };
 
 export const sendOtp = async (req, res) => {
-  const { email, type } = req.body;
   try {
-    if (!email || !type) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and OTP type are required.",
-      });
-    }
-
-    if (type !== "signup") {
-      const user = await User.findOne({ email: email })
-        .select("fullName")
-        .lean();
+    console.log(req.body.type)
+    const validatedBody = sendOtpSchema.parse(req.body);
+    const { email, type } = validatedBody;
+    
+    if (type === "forget-password") {
+      const user = await User.findOne({ email: email }).select("_id").lean();
       if (!user) {
         return res.status(200).json({
           success: true,
-          message:
-            "If an account with that email exists, an OTP has been sent.",
+          message: "If an account with that email exists, an OTP has been sent.",
         });
       }
     }
@@ -292,26 +287,36 @@ export const sendOtp = async (req, res) => {
     );
 
     if (type === "signup") {
-      await mailSender(
-        email,
-        "Registration OTP from SimJob",
-        otpTemplate(otpCode)
+      const title = "Registration OTP from SimJob";
+      const template = otpTemplate(otpCode);
+      await emailQueue.add(
+        "signup",
+        { email, title, template },
+        { jobId: `sign-up-otp-${email}` }
       );
-
-      console.log("SIGN UP");
-    } else {
-      await mailSender(
-        email,
-        "Forget Password OTP from SimJob",
-        forgetPasswordOtpTemplate(otpCode)
+    } else { 
+      const title = "Forget Password OTP from SimJob";
+      const template = forgetPasswordOtpTemplate(otpCode);
+      await emailQueue.add(
+        "forget-password",
+        { email, title, template },
+        { jobId: `forget-password-otp-${email}` }
       );
     }
 
     return res.status(201).json({
       success: true,
-      message: "Otp sent successfully to your provided email",
+      message: "An OTP has been sent to your provided email.",
     });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input data",
+        errors: error.flatten().fieldErrors,
+      });
+    }
+
     console.log("Error in sending otp :: ", error);
     return res.status(500).json({
       success: false,
@@ -321,30 +326,32 @@ export const sendOtp = async (req, res) => {
 };
 
 export const verifyOtp = async (req, res) => {
-  const { email, otp } = req.body;
-
   try {
-    if (!email || !otp) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and OTP are required",
-      });
-    }
+    const validatedBody = verifyOtpSchema.parse(req.body);
+    const { email, otp } = validatedBody;
 
-    const otpRecord = await OTP.findOne({ email, otp }).select("otp").lean();
+    const otpRecord = await OTP.findOne({ email, otp }).select("_id").lean();
 
     if (!otpRecord) {
       return res.status(400).json({
         success: false,
-        message: "OTP is not valid, please enter valid otp",
+        message: "The OTP is invalid or has expired. Please try again.",
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: "OTP verified successfully",
+      message: "OTP verified successfully.",
     });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input data",
+        errors: error.flatten().fieldErrors,
+      });
+    }
+
     console.log("Error in verifying otp :: ", error);
     return res.status(500).json({
       success: false,
@@ -354,26 +361,14 @@ export const verifyOtp = async (req, res) => {
 };
 
 export const forgetPassword = async (req, res) => {
-  const { email, newPassword, newConfirmPassword } = req.body;
-
   try {
-    if (!newPassword || !newConfirmPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "New password and confirm password are required.",
-      });
-    }
-    if (newPassword !== newConfirmPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "Password and confirm password should match.",
-      });
-    }
+    const validatedBody = forgetPasswordSchema.parse(req.body);
+    const { email, newPassword } = validatedBody;
 
     const user = await User.findOne({ email }).select("password");
 
     if (!user) {
-      return res.status(404).json({
+      return res.status(200).json({
         success: false,
         message: "User is not registered.",
       });
@@ -382,24 +377,24 @@ export const forgetPassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 12);
 
     user.password = hashedPassword;
-
     await user.save();
 
-    // const isAlredyUserLoginWithSameCredentials = await Session.find({
-    //   user: user._id,
-    // });
-
-    // if (isAlredyUserLoginWithSameCredentials.length > 0) {
-    await Session.deleteMany({ user: user._id });
-    res.clearCookie("session_id");
-    // }
+    await invalidateAllUserSessions(user._id);
 
     return res.status(200).json({
       success: true,
-      message: "Password changed successfully",
+      message: "Password changed successfully. You can now log in with your new password.",
     });
   } catch (error) {
-    console.log("Error in frogetting password controller :: ", error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input data",
+        errors: error.flatten().fieldErrors,
+      });
+    }
+
+    console.log("Error in forgetting password controller :: ", error);
     return res.status(500).json({
       success: false,
       message: "Something went wrong, please try again later...",
@@ -408,13 +403,13 @@ export const forgetPassword = async (req, res) => {
 };
 
 export const logOut = async (req, res) => {
-  const { userId } = req.user;
+  const { session_id } = req.signedCookies;
 
   try {
-    await Session.deleteMany({ user: userId });
-    return res.status(200).json({
+    await deleteSession(session_id);
+    return res.status(201).json({
       success: true,
-      message: "Successfully log out",
+      message: "Log out successfully",
     });
   } catch (error) {
     console.log("Error in log out :: ", error);
@@ -435,18 +430,14 @@ export const continueWithGoogle = async (req, res) => {
     });
   }
 
-  console.log("IN GOOGLE AUTH CONTROLLER");
-
   const mongoSession = await mongoose.startSession();
   mongoSession.startTransaction();
   try {
-    // verifying idToken
     const { email, picture, name, sub } = await getTokenData(idToken);
 
     let user = await User.findOne({ email }).lean();
 
     let session;
-
     if (user) {
       if (user.authStrategy !== "google") {
         return res.status(401).json({
@@ -454,12 +445,14 @@ export const continueWithGoogle = async (req, res) => {
           message: "Not able to get google account, please register",
         });
       }
-      const allSessions = await Session.find({ user: user._id });
-      if (allSessions.length > 0) {
-        await Session.deleteMany({ user: user._id });
-      }
 
-      session = await Session.create({ user: user._id });
+      session = await createSession(user?._id);
+
+      if (!session) {
+        return res
+          .status(429)
+          .json({ message: "Maximum number of active sessions reached." });
+      }
     } else {
       const additionalDetails = new Profile();
       await additionalDetails.save({ session: mongoSession });
@@ -490,16 +483,22 @@ export const continueWithGoogle = async (req, res) => {
 
       await userAnalytics.save({ session: mongoSession });
 
-      session = await Session.create({ user: newUser._id });
+      session = await createSession(user?._id);
+
+      if (!session) {
+        return res
+          .status(429)
+          .json({ message: "Maximum number of active sessions reached." });
+      }
 
       user = newUser;
     }
 
-    res.cookie("session_id", session._id, {
+    res.cookie("session_id", session, {
       httpOnly: true,
       signed: true,
       secure: true,
-      maxAge: 1000 * 60 * 60 * 24 * 7,
+      maxAge: 1000 * 60 * 60 * 24,
     });
 
     await mongoSession.commitTransaction();
@@ -544,12 +543,13 @@ export const continueWithGitHub = async (req, res) => {
         });
       }
 
-      const allSessions = await Session.find({ user: user._id }).lean();
-      if (allSessions.length > 0) {
-        await Session.deleteMany({ user: user._id });
-      }
+      session = await createSession(user?._id);
 
-      session = await Session.create({ user: user._id });
+      if (!session) {
+        return res
+          .status(429)
+          .json({ message: "Maximum number of active sessions reached." });
+      }
     } else {
       const profile = await getUserProfile(access_token);
 
@@ -582,16 +582,23 @@ export const continueWithGitHub = async (req, res) => {
 
       await userAnalytics.save({ session: mongoSession });
 
-      session = await Session.create({ user: newUser._id });
+      session = await createSession(user?._id);
+
+      if (!session) {
+        return res
+          .status(429)
+          .json({ message: "Maximum number of active sessions reached." });
+      }
 
       user = newUser;
     }
 
-    res.cookie("session_id", session._id, {
+    console.log("SESSION GITHUB :: ", session);
+    res.cookie("session_id", session, {
       httpOnly: true,
       signed: true,
       secure: true,
-      maxAge: 1000 * 60 * 60 * 24 * 7,
+      maxAge: 1000 * 60 * 60 * 24,
     });
 
     await mongoSession.commitTransaction();

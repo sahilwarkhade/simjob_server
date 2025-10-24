@@ -2,73 +2,48 @@ import { model, Schema } from "mongoose";
 
 const OATestSectionSchema = new Schema(
   {
-    section_name: { type: String, required: true },
-    section_type: {
+    name: { type: String, required: true },
+
+    type: {
       type: String,
       enum: ["single_choice", "multiple_choice", "coding", "text"],
       required: true,
     },
-    no_of_questions: { type: Number, required: true },
-    section_questions: [
+
+    noOfQuestions: { type: Number, required: true },
+
+    questions: [
       {
-        question_id: {
-          type: String,
-          required: true,
+        slug: { type: String },
+
+        title: { type: String },
+
+        description: { type: String, required: true },
+
+        submission: {
+          type: Schema.Types.ObjectId,
+          ref: "Submission",
         },
-        question_title: { type: String } /*only for coding section*/,
-        question_description: { type: String },
-        difficulty: { type: String, enum: ["easy", "medium", "hard", 'expert'] },
-        test_cases: {
-          visible: [
-            {
-              test_case_id: { type: String },
-              input: { type: String },
-              expected_output: { type: String },
-              explanation: { type: String },
-            },
-          ],
-          hidden: [
-            {
-              test_case_id: { type: String },
-              input: { type: String },
-              expected_output: { type: String },
-            },
-          ],
-        } /*Only for coding section*/,
 
-        constraints: { type: String, default: null },
-        starter_code: [
-          { type: Schema.Types.Mixed },
-        ] /*Only for coding section*/,
+        options: [{ type: String }],
 
-        options: [
-          {
-            text: { type: String },
-            isCorrect: { type: Boolean, required: true, default: false },
-          },
-        ], // For multiple-choice or single-choice questions
+        correctOptions: [{ type: String }],
       },
     ],
 
-    // no_of_answered_question: { type: Number, default: 0 },
-
-    section_answers: [
-      {
-        question_id: {
-          type: String,
-          // required: true,
-        },
-        submitted_answer: {
-          type: String,
-          default: null,
-        },
-        evaluation:{
-          type:Schema.Types.Mixed
-        }
-      },
-    ],
+    result: {
+      type: Schema.Types.ObjectId,
+      ref: "SectionResult",
+    },
   },
   { timestamps: true }
 );
+
+// OATestSectionSchema.pre("save", function (next) {
+//   if (this.noOfQuestions !== this.questions.length) {
+//     return next(new Error("noOfQuestions must match questions array length"));
+//   }
+//   next();
+// });
 
 export default model("OATestSections", OATestSectionSchema);

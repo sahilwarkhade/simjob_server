@@ -1,26 +1,39 @@
-import { contactUsEmail } from "../../Templates/Email/contactus.js"
-import { mailSender } from "../../utils/SendEmail/index.js"
+import { z } from "zod";
+import { emailQueue } from "../../config/bullMq.js";
+import { generateContactEmail } from "../../Templates/Email/contactus.js";
+import { contactUsSchema } from "../../validators/generalValidators.js";
 
 export const contactUsController = async (req, res) => {
-  const { email, fullName, subject, query, message } = req.body
-  console.log(req.body)
   try {
-    const emailRes = await mailSender(
-      email,
-      "Your Data send successfully",
-      contactUsEmail(email, fullName, subject, query, message)
-    )
-    console.log("Email Res ", emailRes)
-    return res.json({
+    const validatedBody = contactUsSchema.parse(req.body);
+    const { email, fullName, subject, query, message } = validatedBody;
+
+    const template = generateContactEmail(email, fullName, subject, query, message);
+    const title = "Your request has been received";
+
+    await emailQueue.add(
+      "contact",
+      { email, template, title },
+      { jobId: `${Date.now()}-${email}` }
+    );
+
+    return res.status(200).json({
       success: true,
-      message: "Email send successfully",
-    })
+      message: "Your message has been sent successfully. We will get back to you shortly.",
+    });
   } catch (error) {
-    console.log("Error", error)
-    console.log("Error message :", error.message)
-    return res.json({
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid input data",
+        errors: error.flatten().fieldErrors,
+      });
+    }
+
+    console.log("Error in contact us controller:", error);
+    return res.status(500).json({
       success: false,
-      message: "Something went wrong...",
-    })
+      message: "An unexpected error occurred. Please try again later.",
+    });
   }
-}
+};

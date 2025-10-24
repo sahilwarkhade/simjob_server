@@ -1,18 +1,14 @@
 import express from "express";
-import {
-  analysisAnswer,
-  askQuestions,
-  generateFeedback,
-  startMockInterview,
-} from "../controllers/MockInterviewControllers/MockInterview.controller.js";
 import auth from "../middlewares/auth.middleware.js";
-import { upload } from "../config/multerFileUpload.js";
+import {
+  createCompanySpecificMockInterview,
+  createSkillBasedMockInterview,
+  getFeedback,
+} from "../controllers/MockInterviewControllers/MockInterview.controller.js";
 const router = express.Router();
 
-router.post("/mock-interview", auth, startMockInterview);
-router.post("/mock-interview/analysis-answer/:mockInterviewId/:questionId", upload.single('answerFile'),analysisAnswer);
-router.post("/mock-interview/:mockInterviewId/feedback",generateFeedback);
-router.get("/mock-interview/:mockInterviewId/:questionId", askQuestions);
-router.get("/mock-interview/:mockInterviewId", askQuestions);
+router.post("/companyspecific", auth, createCompanySpecificMockInterview);
+router.post("/skillbased", auth, createSkillBasedMockInterview);
+router.get("/feedback/:interviewId", auth, getFeedback);
 
 export default router;

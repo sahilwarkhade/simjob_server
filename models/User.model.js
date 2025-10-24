@@ -6,6 +6,7 @@ const userSchema = new Schema(
       type: String,
       required: [true, "Please provide your name."],
       minLength: 3,
+      match: [/^[a-zA-Z\s]+$/, "Name can only contain letters and spaces"]
     },
 
     email: {
@@ -28,7 +29,7 @@ const userSchema = new Schema(
       required: function () {
         return this.authStrategy === "local";
       },
-      minlength: 3,
+      minlength: 5,
     },
 
     additionalDetails: {

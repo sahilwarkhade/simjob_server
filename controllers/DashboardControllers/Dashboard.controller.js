@@ -34,24 +34,36 @@ export const getRecentSessions = async (req, res) => {
   const { userId } = req.user;
 
   try {
-    const mockInterviewResults = await MockInterview.find({ user: userId })
-      .sort({ createdAt: -1 })
-      .limit(3);
+    const [mockInterviewResults, oaTestResults] = await Promise.all([
+      MockInterview.find({ user: userId, status: "submitted" })
+        .sort({ updatedAt: -1 })
+        .limit(3)
+        .lean(), 
+      OATest.find({ user: userId, status: "submitted" })
+        .sort({ updatedAt: -1 })
+        .limit(3)
+        .lean(),
+    ]);
 
-    const oaTestResults = await OATest.find({ user: userId })
-      .sort({ createdAt: -1 })
-      .limit(3);
-
-    const allRecentSessions = [...mockInterviewResults, ...oaTestResults];
+    const allRecentSessions = [
+      ...mockInterviewResults.map((item) => ({
+        ...item,
+        category: item.mockCategory || null,
+        difficulty: item.difficultyLevel || null,
+        type: "interview",
+      })),
+      ...oaTestResults.map((item) => ({
+        ...item,
+        category: item.testCategory || null,
+        type: "test",
+      })),
+    ];
 
     allRecentSessions.sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+      (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
     );
 
-    let top5RecentSessions = allRecentSessions;
-    if (allRecentSessions.length > 5) {
-      top5RecentSessions = allRecentSessions.slice(0, 5);
-    }
+    const top5RecentSessions = allRecentSessions.slice(0, 5);
 
     return res.status(200).json({
       success: true,
@@ -72,27 +84,37 @@ export const getHistory = async (req, res) => {
   const { userId } = req.user;
 
   try {
-    const mockHistory = await MockInterview.find({ user: userId })
-      .select(
-        "mockCategory companyName skills role difficultyLevel duration feedback createdAt"
-      )
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const oaHistory = await OATest.find({ user: userId })
-      .select(
-        "oaCategory companies role difficulty duration feedback createdAt"
-      )
-      .sort({ createdAt: -1 })
-      .lean();
+    const [mockHistory, oaHistory] = await Promise.all([
+      MockInterview.find({ user: userId })
+        .select(
+          "mockCategory companyName skills role difficultyLevel duration feedback.overallSummary updatedAt score status"
+        )
+        .sort({ updatedAt: -1 })
+        .lean(),
+      OATest.find({ user: userId })
+        .select(
+          "testCategory companyName role difficulty duration feedback.overallSummary score updatedAt status"
+        )
+        .sort({ updatedAt: -1 })
+        .lean(),
+    ]);
 
     const combinedHistory = [
-      ...mockHistory.map((item) => ({ ...item, type: "mockInterview" })),
-      ...oaHistory.map((item) => ({ ...item, type: "oaTest" })),
+      ...mockHistory.map((item) => ({
+        ...item,
+        category: item.mockCategory || null,
+        difficulty: item.difficultyLevel || null,
+        type: "interview",
+      })),
+      ...oaHistory.map((item) => ({
+        ...item,
+        category: item.testCategory || null,
+        type: "test",
+      })),
     ];
 
     combinedHistory.sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+      (a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)
     );
 
     return res.status(200).json({

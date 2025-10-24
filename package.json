@@ -4,28 +4,36 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node --watch server.js",
-    "test": "node test.js"
+    "start": "node --watch --env-file=.env server.js",
+    "insert:dsaQuestions": "node scripts/insertQuestionInDb.js",
+    "worker:interview": "node --watch --env-file=.env workers/interview-worker.js",
+    "worker:feedback": "node --watch --env-file=.env workers/feedback-worker.js",
+    "worker:email": "node --watch --env-file=.env workers/email-worker.js"
   },
   "author": "sahil warkhade",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@google-cloud/speech": "^7.2.0",
+    "@google-cloud/text-to-speech": "^6.3.0",
     "@google/genai": "^1.10.0",
     "axios": "^1.10.0",
     "bcrypt": "^6.0.0",
+    "bullmq": "^5.58.7",
     "cloudinary": "^2.7.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.0",
     "express": "^5.1.0",
     "google-auth-library": "^10.2.1",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.7.0",
     "jsonwebtoken": "^9.0.2",
     "mime": "^4.0.7",
     "mongoose": "^8.16.4",
     "multer": "^2.0.2",
-    "node-cache": "^5.1.2",
     "nodemailer": "^7.0.5",
-    "streamifier": "^0.1.1"
+    "uuid": "^13.0.0",
+    "ws": "^8.18.3",
+    "zod": "^4.1.12"
   }
 }

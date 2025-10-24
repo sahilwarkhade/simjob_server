@@ -1,19 +1,18 @@
-import Session from "../models/Session.model.js";
+import { getSession } from "../utils/Sessions/index.js";
+
 
 const auth = async (req, res, next) => {
   const { session_id } = req.signedCookies;
-
   try {
     if (!session_id) {
-      res.clearCookie("session_id");
       return res.status(401).json({
         success: false,
         message: "Authentication required. Please log in.",
       });
     }
 
-    const userSession = await Session.findById(session_id);
-    if (!userSession) {
+    const session = await getSession(session_id)
+    if (!session) {
       res.clearCookie("session_id");
       return res.status(401).json({
         success: false,
@@ -21,10 +20,9 @@ const auth = async (req, res, next) => {
       });
     }
 
-    console.log("User Session :: ", userSession?.user);
-
     req.user = req.user || {};
-    req.user.userId = userSession.user;
+    req.user.userId = session.userId;
+    req.user.sessionId=session;
     next();
   } catch (error) {
     console.log("Error in auth middleware :: ", error);

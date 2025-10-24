@@ -3,54 +3,84 @@ import mongoose, { Schema } from "mongoose";
 const oaTestSchema = new mongoose.Schema(
   {
     user: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
+      index: true,
     },
 
-    oaCategory: {
+    testCategory: {
       type: String,
       enum: ["companyspecific", "practice"],
       default: "companyspecific",
+      lowercase: true,
     },
 
-    company: { type: String, required: true },
+    // for company specific test
+    companyName: {
+      type: String,
+      required: function () {
+        return this.testCategory === "companyspecific";
+      },
+    },
 
-    role: { type: String, required:true},
+    role: {
+      type: String,
+      required: function () {
+        return this.testCategory === "companyspecific";
+      },
+    },
 
     experienceLevel: {
       type: String,
-      required:true
+      required: function () {
+        return this.testCategory === "companyspecific";
+      },
     },
 
+    // for practice test
     difficulty: {
       type: String,
-      enum: ["easy", "medium", "hard", "expert"],
-      default: "medium",
+      enum: ["Easy", "Medium", "Hard", "Expert", ""],
+      default: "",
     },
 
-    userSelectedSections: [{ type: String }],
+    userSelectedSections: [
+      {
+        type: String,
+        required: function () {
+          return this.testCategory !== "companyspecific";
+        },
+      },
+    ],
 
+    specialInstructions: { type: String, default: null },
+
+    // required for both kind of test
     duration: { type: Number },
-
-    specialInstructions: { type: String },
-
-    preferredProgrammingLanguges: [{ type: String, required: true }],
 
     sections: [
       {
         type: Schema.Types.ObjectId,
         ref: "OATestSections",
+        required: true,
       },
     ],
+
+    status: {
+      type: "String",
+      enum: ["pending", "submitted"],
+      default: "pending",
+      required: true,
+    },
 
     feedback: {
       type: Schema.Types.Mixed,
     },
 
-    createdAt: {
-      type: Date,
-      default: Date.now,
+    score: {
+      type: Number,
+      default: 0,
     },
   },
   { timestamps: true }
