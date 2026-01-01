@@ -8,7 +8,7 @@ import ProfileRoutes from "./routes/Profile.route.js";
 import OATestRoutes from "./routes/OATest.route.js";
 import DashboardRoutes from "./routes/Dashboard.route.js";
 import ContactUsRoutes from "./routes/Contactus.route.js";
-import { connectCloudinary } from "./config/Cloudinary.js";
+import { connectCloudinary } from "./config/cloudinary.js";
 import cookieParser from "cookie-parser";
 import http from "http";
 import auth from "./middlewares/auth.middleware.js";

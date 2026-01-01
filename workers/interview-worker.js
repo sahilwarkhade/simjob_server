@@ -1,6 +1,6 @@
 import "dotenv/config.js";
 import { Worker } from "bullmq";
-import { feedbackQueue, INTERVIEW_QUEUE_NAME } from "../config/bullmq.js";
+import { feedbackQueue, INTERVIEW_QUEUE_NAME } from "../config/bullMq.js";
 import { connection } from "../config/redis.js";
 import { streamTextToSpeech } from "../services/googleTTS.js";
 import { getGeminiResponseStream } from "../services/gemini.js";
