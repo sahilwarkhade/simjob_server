@@ -1,3 +1,4 @@
+import "dotenv/config.js";
 import OATestSections from "../models/OATestSection.model.js";
 import User from "../models/User.model.js";
 import { Worker } from "bullmq";

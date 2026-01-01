@@ -1,3 +1,4 @@
+import "dotenv/config.js";
 import { Worker } from "bullmq";
 import { SEND_EMAIL_QUEUE } from "../config/bullMq.js";
 import { mailSender } from "../utils/SendEmail/index.js";

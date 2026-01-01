@@ -1,3 +1,4 @@
+import "dotenv/config.js";
 import { URL } from "node:url";
 import { WebSocketServer } from "ws";
 import { v4 as uuidv4 } from "uuid";
@@ -10,7 +11,7 @@ export const connectWebSocket = (server) => {
   const wss = new WebSocketServer({ server });
 
   wss.on("connection", async (ws, req) => {
-    const parsedUrl = new URL(req.url, `http://${req.headers.host}`);
+    const parsedUrl = new URL(req.url, `https://${req.headers.host}`);
     const interviewId = parsedUrl.searchParams.get("interviewId");
 
     const sessionId = uuidv4();

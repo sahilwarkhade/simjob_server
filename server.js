@@ -1,4 +1,5 @@
 import express from "express";
+import "dotenv/config.js";
 import cors from "cors";
 import connectDB from "./config/DB.js";
 import AuthRoutes from "./routes/Auth.route.js";
@@ -21,7 +22,12 @@ await connectCloudinary();
 
 app.use(helmet());
 
-const allowedOrigins = ["http://localhost:4173", "http://localhost:5173"];
+const allowedOrigins = [
+  "http://localhost:4173",
+  "http://localhost:5173",
+  "https://simjob.space",
+  "http://simjob.space",
+];
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -66,6 +72,6 @@ app.get("/", (req, res) => {
 
 connectWebSocket(server);
 
-server.listen(process.env.PORT, async () => {
+server.listen(process.env.PORT, "0.0.0.0", async () => {
   console.log("Server Listening on PORT : ", process.env.PORT);
 });

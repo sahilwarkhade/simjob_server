@@ -98,7 +98,6 @@ export const registerUser = async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       signed: true,
-      secure: true,
       maxAge: 1000 * 60 * 60 * 24,
     };
 
@@ -173,7 +172,7 @@ export const loginUser = async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       signed: true,
-      secure: true,
+      sameSite: 'none',
       maxAge: 1000 * 60 * 60 * 24,
     };
 
@@ -497,7 +496,7 @@ export const continueWithGoogle = async (req, res) => {
     res.cookie("session_id", session, {
       httpOnly: true,
       signed: true,
-      secure: true,
+      
       maxAge: 1000 * 60 * 60 * 24,
     });
 
@@ -597,7 +596,7 @@ export const continueWithGitHub = async (req, res) => {
     res.cookie("session_id", session, {
       httpOnly: true,
       signed: true,
-      secure: true,
+      
       maxAge: 1000 * 60 * 60 * 24,
     });
 

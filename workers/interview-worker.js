@@ -1,3 +1,4 @@
+import "dotenv/config.js";
 import { Worker } from "bullmq";
 import { feedbackQueue, INTERVIEW_QUEUE_NAME } from "../config/bullmq.js";
 import { connection } from "../config/redis.js";
