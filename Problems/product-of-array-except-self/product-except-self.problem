@@ -1,0 +1,6 @@
+Problem Name : 'product-of-array-except-self'
+Function Name : 'productExceptSelf'
+Input Structure :
+    Input Field : array<integer> nums
+Output Structure :
+    Output Field : array<integer> result

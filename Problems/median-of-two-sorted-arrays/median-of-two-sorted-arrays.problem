@@ -1,0 +1,7 @@
+Problem Name : 'median-of-two-sorted-arrays'
+Function Name : 'findMedianSortedArrays'
+Input Structure :
+    Input Field : array<integer> nums1
+    Input Field : array<integer> nums2
+Output Structure :
+    Output Field : float median

@@ -1,0 +1,7 @@
+Problem Name : 'two-sum'
+Function Name : 'twoSum'
+Input Structure :
+    Input Field : array<integer> nums
+    Input Field : integer target
+Output Structure :
+    Output Field : array<integer> result
