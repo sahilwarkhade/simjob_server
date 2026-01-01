@@ -1,4 +1,4 @@
-import { interviewQueue } from "../config/bullmq.js";
+import { interviewQueue } from "../config/bullMq.js";
 import { connection } from "../config/redis.js";
 import { generateSummary } from "./gemini.js";
 import { createRecognitionStream } from "./googleSTT.js";
