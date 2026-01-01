@@ -32,7 +32,7 @@ export const connectWebSocket = (server) => {
       sessionId,
       text: `Hello, I’m your Interviewer for today’s mock session. Thank you for joining. Before we begin, let's discuss the interview process, or shall we get started?`,
     });
-    z;
+    
     ws.on("message", async (message) => {
       try {
         const parsed = JSON.parse(message);
