@@ -9,7 +9,7 @@ import {
   sendOtp,
   updatePassword,
   verifyOtp,
-} from "../controllers/Authcontrollers/Auth.controller.js";
+} from "../controllers/AuthControllers/Auth.controller.js";
 import auth from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
