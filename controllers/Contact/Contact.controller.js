@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { emailQueue } from "../../config/bullMq.js";
-import { generateContactEmail } from "../../Templates/Email/contactus.js";
+import { generateContactEmail } from "../../templates/Email/contactus.js";
 import { contactUsSchema } from "../../validators/generalValidators.js";
 
 export const contactUsController = async (req, res) => {
